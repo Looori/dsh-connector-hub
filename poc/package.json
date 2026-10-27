@@ -33,7 +33,16 @@
   "scripts": {
     "build": "node build.mjs"
   },
+  "peerDependencies": {
+    "@deepseek-ai/dsh-mcp-client": ">=0.2.1-rc.3 <0.3.0"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/dsh-mcp-client": {
+      "optional": true
+    }
+  },
   "dependencies": {
+    "@modelcontextprotocol/client": "2.2.0",
     "@napi-rs/keyring": "^1.1.0"
   },
   "devDependencies": {

@@ -1,0 +1,14 @@
+{
+  "name": "dsh-connector-hub-poc-test-server",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Local Streamable HTTP MCP server for the connector hub PoC.",
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "zod": "^3.25.0"
+  }
+}
