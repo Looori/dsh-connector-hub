@@ -1,0 +1,6 @@
+# One row for the PoC package: its Host half registers the routes, and the
+# client module system attaches its browser half because the row names the
+# bare package.
+- insert:
+    - id: connector-hub-poc
+      name: dsh-connector-hub-poc
