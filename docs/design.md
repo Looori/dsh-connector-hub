@@ -2,7 +2,7 @@
 
 - 日期：2026-10-29
 - 状态：一期设计依据。标注「待 spike」的部分，要等 M0 验证完才算最终方案。
-- 目标版本：DeepSeek Harness 0.2.1-rc.3
+- 目标版本：DeepSeek Harness 0.2.1-rc.5（2026-11-02 由 rc.3 改为 rc.5，见 §3 末尾）
 - 参考：[PoC 结果](../poc/README.md)
 
 ## 1. 目标与范围
@@ -33,14 +33,14 @@ dsh web 和 DeepSeek Harness Desktop 都要支持。DSH 仓库不接受社区 MR
 | 5 | 启动时服务不可用 | 一期由用户手动重新挂载 |
 | 6 | 配置存放 | 普通配置写 `$DSH_HOME/connector-hub/connectors.json`，各 profile 共用；密钥存系统钥匙串（§7） |
 | 7 | UI 位置 | Plugins 页的 tab，分「我的」和「发现」两页（§9） |
-| 8 | 版本兼容 | 按 0.2.1-rc.3 实现。`engines.dsh` 写 `>=0.2.1-rc.3 <0.3.0`，CI 同时测 rc.3 和 npm 的 `next` 标签（10 月 26 日已发布 0.2.1-rc.4） |
+| 8 | 版本兼容 | 按 0.2.1-rc.5 实现。`engines.dsh` 写 `>=0.2.1-rc.5 <0.3.0`，CI 同时测 rc.5 和 npm 的 `next` 标签。2026-11-02 由 rc.3 改为 rc.5：Desktop 已自动更新到 rc.5，npm 的 `latest` 和 `next` 也都指向 rc.5 |
 | 9 | 包名 | `dsh-connector-hub`，不带 scope。2026-10-29 查过，npmjs 上还没人用这个名字 |
 | 10 | 第一批连接器 | Notion、Xmind（中国版）、高德地图、百度地图（附录 A）。一期不接 Xmind 国际版 |
 | 11 | 工程结构 | pnpm 工作区（§11） |
 | 12 | 测试 | 单元测试、自动端到端冒烟、Desktop 手动检查清单，三层（§12） |
 | 13 | 平台 | 一期只支持 macOS |
 
-## 3. 已验证的事实（0.2.1-rc.3）
+## 3. 已验证的事实（rc.3 实测，rc.5 已核对源码）
 
 PoC 验证过的（详见 [poc/README.md](../poc/README.md)）：
 
@@ -51,7 +51,7 @@ PoC 验证过的（详见 [poc/README.md](../poc/README.md)）：
 - 卸载到重新挂载之间，工具列表是空的。工具集的变化会以 `developer/message`（`tool-registry`）的形式写进会话，模型看得到。
 - 对无状态 HTTP 服务，服务挂掉后注册表仍显示工具在线。要判断服务是否可用，只能自己去试连。
 - 设了 `failOnStartupError: true`，启动时连不上会让挂载变成 FAILED，并移除这个服务的工具。
-- rc.3 只有 `ctx.tools.schemas(scope)`，没有 `definitions()`。查 API 要以发布版本为准，不能以 master 为准。
+- rc.3 到 rc.5 都只有 `ctx.tools.schemas(scope)`，没有 `definitions()`。查 API 要以发布版本为准，不能以 master 为准。
 
 本次（2026-10-29）读 rc.3 安装包核对的：
 
@@ -61,6 +61,13 @@ PoC 验证过的（详见 [poc/README.md](../poc/README.md)）：
 - DSH 在 Host 进程里把出网代理装成 undici 的全局 dispatcher，发往 loopback 地址的请求一律直连。插件只要用全局 `fetch`，出网就会自动走用户配置的代理。本机就是经 `HTTP(S)_PROXY` 出网的。
 - `@deepseek-ai/dsh-home-paths` 的 `resolveDshHome()` 按以下顺序确定目录：显式传入的路径、`$DSH_HOME`、默认目录。
 - DSH 依赖的 `@modelcontextprotocol/client` 是 2.2.0。这个版本已经实现 OAuth 的元数据发现、动态注册、PKCE、`resource` 参数、回调 `iss` 校验（RFC 9207）和 token 刷新，我们实现 `OAuthClientProvider` 接口即可。
+
+2026-11-02 对照 rc.5 核对的（比较 `dsh-v0.2.1-rc.3` 和 `dsh-v0.2.1-rc.5` 两个标签的源码，并读了 Desktop rc.5 安装包）：
+
+- 两个版本之间只改了十来个源文件，集中在聊天里推理内容的显示上。插件用到的接口都没变：tools、agents、`connection.fetch`、Plugins 页插槽、`ui-primitives`、`home-paths`、出网代理。
+- mcp-client 只改了一处：服务器没声明 resources 能力时，不再去请求资源列表。`streamable-http` 的配置项和 rc.3 完全一样，仍然只有静态 `headers`，§4.2 的结论不变。
+- rc.5 依赖的 `@deepseek-ai/cordis` 仍是 `~4.0.5`，`@modelcontextprotocol/client` 仍是 2.2.0。npm 上 `@deepseek-ai/dsh-*@0.2.1-rc.5` 各包齐全，可以直接作为类型依赖。
+- 以上只是源码层面的核对。PoC 在 rc.5 上的运行结果还没有重跑，列为 M0 的 ⓪。
 
 ## 4. 总体架构
 
@@ -87,7 +94,7 @@ dsh-mcp-client ──► http://127.0.0.1:<端口>/c/<id>/mcp ──► gateway 
 
 ### 4.2 本地凭据网关（推荐，待 spike）
 
-**问题：** rc.3 的 mcp-client 只接受静态请求头，想把新 token 送过去，只能卸载再挂载。Xmind 的 access token 有效期只有 1 小时，这意味着每小时都要重新挂载一次。而 PoC 已经看到，重新挂载期间工具列表是空的。如果此时会话正好发起请求，模型会看到工具消失又出现，DSH 还会把这个变化写进会话；正在执行的工具调用也会失败。另外，高德把 Key 放在 URL 查询参数里，直接写进 mcp-client 配置的话，Key 可能随 URL 出现在报错和日志里。
+**问题：** rc.3 到 rc.5 的 mcp-client 都只接受静态请求头，想把新 token 送过去，只能卸载再挂载。Xmind 的 access token 有效期只有 1 小时，这意味着每小时都要重新挂载一次。而 PoC 已经看到，重新挂载期间工具列表是空的。如果此时会话正好发起请求，模型会看到工具消失又出现，DSH 还会把这个变化写进会话；正在执行的工具调用也会失败。另外，高德把 Key 放在 URL 查询参数里，直接写进 mcp-client 配置的话，Key 可能随 URL 出现在报错和日志里。
 
 **做法：** 插件启动时，在 `127.0.0.1` 上用随机端口起一个 HTTP 服务，作为凭据网关。挂载 mcp-client 时，`url` 指向网关的 `http://127.0.0.1:<端口>/c/<连接器 id>/mcp`，请求头只带一个本进程随机生成的 `X-Connector-Hub-Key`。网关做这几件事：
 
@@ -100,7 +107,7 @@ dsh-mcp-client ──► http://127.0.0.1:<端口>/c/<id>/mcp ──► gateway 
 
 **代价和退路：** 大约 200 行代码，外加流式转发的测试。M0 要验证 Streamable HTTP（含 SSE）经网关转发能正常工作。如果验证不通过，退回到把请求头直接写进 mcp-client 配置的做法：刷新后重新挂载，并尽量挑会话空闲的时候做。
 
-为什么不把 `authProvider` 交给 mcp-client：rc.3 的 mcp-client 不接受这个参数，我们又改不了 DSH。
+为什么不把 `authProvider` 交给 mcp-client：rc.3 到 rc.5 的 mcp-client 都不接受这个参数，我们又改不了 DSH。
 
 ## 5. 连接器目录
 
@@ -270,7 +277,7 @@ dsh-mcp-client ──► http://127.0.0.1:<端口>/c/<id>/mcp ──► gateway 
 
 「连接器」tab 注册在 Plugins 页的 `plugins.tab` 插槽里，tab 内用 `SegmentedTabs` 分成「我的」和「发现」两页，英文是 Yours / Discover。打开时，已有连接器就进「我的」，没有就进「发现」。
 
-组件全部来自 rc.3 的 `@deepseek-ai/dsh-client-ui-primitives`，用到 `SegmentedTabs`、`Modal`、`Input`、`Button`、`Switch`、`Tag`、`StateDot`、`DisclosureRow`、`Toast`。这个包运行时与 DSH 共用，所以界面风格和深浅色都跟随 DSH。颜色用 DSH 的主题变量，不写死色值；PoC 里写死的颜色要换掉，变量名在 M1 对照 DSH 源码确定。
+组件全部来自 rc.5 的 `@deepseek-ai/dsh-client-ui-primitives`，用到 `SegmentedTabs`、`Modal`、`Input`、`Button`、`Switch`、`Tag`、`StateDot`、`DisclosureRow`、`Toast`。这个包运行时与 DSH 共用，所以界面风格和深浅色都跟随 DSH。颜色用 DSH 的主题变量，不写死色值；PoC 里写死的颜色要换掉，变量名在 M1 对照 DSH 源码确定。
 
 ### 9.1 发现页
 
@@ -354,7 +361,7 @@ OAuth：
 
 结论：改动是增量的，一期的挂载方式不用推翻。
 
-- 隐藏工具：在 `agent/created` 事件里，对关闭了某连接器的会话调用 `agent.ctx.tools.restrict({ deny: [该连接器的工具名] })`。它只影响这一个会话，连接本身仍然全局共用一条。rc.3 里已有这个事件和接口。
+- 隐藏工具：在 `agent/created` 事件里，对关闭了某连接器的会话调用 `agent.ctx.tools.restrict({ deny: [该连接器的工具名] })`。它只影响这一个会话，连接本身仍然全局共用一条。rc.3 到 rc.5 都有这个事件和接口。
 - 坑：`restrict()` 不接受当前未注册的工具名，会直接报错。所以要等连接器连上后再执行，重新挂载或工具列表变化后还要重新执行。
 - 持久化：在 `connectors.json` 里按会话 id 记录开关状态，`schemaVersion` 加 1。工具集的变化 DSH 本身会写进会话日志，不需要我们另外记录。
 - 界面：在会话页放开关，需要一个会话界面的插槽，外部插件能用哪个还没确认。退路是在「连接器」tab 里列出各会话，在那里开关。
@@ -383,11 +390,11 @@ dsh-connector-hub/              pnpm 工作区，Node 24
 - `package.json`：
   - `exports` 是 `.`（Host）、`./client`（浏览器端）和 `./package.json`；
   - `dsh.bundle.patch` 指向 `cordis.patch.yml`，`dsh.client` 和 PoC 一样；
-  - `engines.dsh` 写 `>=0.2.1-rc.3 <0.3.0`。
+  - `engines.dsh` 写 `>=0.2.1-rc.5 <0.3.0`。
 - 依赖：
   - 运行时必须和 DSH 共用同一份的包，声明为可选 peer 依赖：`@deepseek-ai/dsh-mcp-client`、`@deepseek-ai/dsh-home-paths`；
   - 普通依赖：`@modelcontextprotocol/client`，版本和 DSH 一致，用 2.2.0；`@napi-rs/keyring`。
-- 类型：devDependencies 引入 `@deepseek-ai/dsh-*@0.2.1-rc.3` 和 `@deepseek-ai/cordis@4.0.5`，用真实类型替换 PoC 里手写的接口。CI 里跑 `tsc --noEmit`。
+- 类型：devDependencies 引入 `@deepseek-ai/dsh-*@0.2.1-rc.5` 和 `@deepseek-ai/cordis@4.0.5`，用真实类型替换 PoC 里手写的接口。CI 里跑 `tsc --noEmit`。
 - 浏览器端：CSS modules 和静态资源还没验证，一期只用内联样式和 `@deepseek-ai/dsh-client-ui-primitives`。共享模块列表照抄 DSH 的 `PLATFORM_MODULES`。
 - README 和 `description` 里写明：这是社区插件，不是 DeepSeek 官方产品。
 
@@ -403,7 +410,7 @@ dsh-connector-hub/              pnpm 工作区，Node 24
    - 接口：只接受目录里的 id，拒绝未知 id 和多余字段；试连失败时不写配置、不存 Key；
    - 钥匙串在测试里换成内存实现。
 2. **端到端冒烟测试（自动，在 CI 里跑）**
-   - 用 npm 上的 `@deepseek-ai/dsh`，测试矩阵是 `0.2.1-rc.3` 加 `next`，跑在 GitHub Actions 的 macOS 机器上。
+   - 用 npm 上的 `@deepseek-ai/dsh`，测试矩阵是 `0.2.1-rc.5` 加 `next`，跑在 GitHub Actions 的 macOS 机器上。
    - 每次用临时的 `DSH_HOME`，不碰真实数据。
    - 流程：
      1. 启动模拟服务：复用 `poc/test-server`，再加一个带 OAuth 的版本和一个用 API Key 鉴权的版本；
@@ -425,7 +432,7 @@ dsh-connector-hub/              pnpm 工作区，Node 24
 
 | 阶段 | 内容 | 完成标准 |
 |---|---|---|
-| M0 spike | ① Notion 和 Xmind 接受 `127.0.0.1` 回调地址的动态注册；② Desktop 里 `window.open` 打开授权页的行为；③ 网关转发 Streamable HTTP（含 SSE），并且出网走 DSH 的代理 | 每项有结论，写回本文 |
+| M0 spike | ⓪ 在 rc.5 的 Desktop 和 dsh web 上重跑 PoC 冒烟；① Notion 和 Xmind 接受 `127.0.0.1` 回调地址的动态注册；② Desktop 里 `window.open` 打开授权页的行为；③ 网关转发 Streamable HTTP（含 SSE），并且出网走 DSH 的代理 | 每项有结论，写回本文 |
 | M1 骨架 | 工作区、真实类型、目录格式和 4 个条目、目录构建和发布脚本、store、secrets、网关 | 单元测试通过，Pages 上能拉到目录 |
 | M2 API Key | 「我的」「发现」两页和添加弹窗；高德、百度端到端打通：添加、试连、挂载、调用、停用、删除 | 端到端冒烟通过，Desktop 手动验证通过 |
 | M3 OAuth | Notion、Xmind：授权、刷新、跨进程锁、需要重新授权的处理、删除时吊销 | 同上，再加上 token 过期后自动刷新 |

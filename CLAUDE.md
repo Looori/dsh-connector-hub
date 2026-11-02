@@ -32,7 +32,7 @@ DeepSeek Harness（DSH）的「连接器市场」外部插件：在 Plugins 页�
 - 公开仓库（`Looori/*`）的提交邮箱用 `66784394+Looori@users.noreply.github.com`。
 - 不改全局 npm 配置。安装依赖时临时加 `--registry=https://registry.npmmirror.com`。
 - Node 24：`export PATH="$HOME/.nvm/versions/node/v24.16.0/bin:$PATH"`（系统 node 是 v20）。
-- Desktop 自带的 CLI：`/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh`（0.2.1-rc.3）。
-- 查 DSH API 要以发布版本为准：本机源码在 `../deepseek-harness`，标签是 `dsh-v0.2.1-rc.3`，不要看 master。
+- Desktop 自带的 CLI：`/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh`（0.2.1-rc.5，2026-11-02 起）。
+- 查 DSH API 要以发布版本为准：本机源码在 `../deepseek-harness`，标签是 `dsh-v0.2.1-rc.5`（已拉到本地），不要看 master。
 - 目录站点仓库：`../looori.github.io`，对应 GitHub 上的 `Looori/looori.github.io`。
 - 修改用户的 Desktop 状态（退出 Desktop、改 profile）前先确认。
