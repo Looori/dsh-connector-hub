@@ -3,7 +3,8 @@
   "compilerOptions": {
     "rootDir": "src",
     "resolveJsonModule": true,
+    "jsx": "react-jsx",
     "types": ["node"]
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts", "src/**/*.tsx"]
 }
