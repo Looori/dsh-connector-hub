@@ -1,6 +1,9 @@
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
+import type { StoredConnector } from '../shared/config'
 import type { ConnectorProbeResult } from '../shared/status'
+import { CredentialGateway } from './gateway'
 import { safeErrorMessage } from './redact'
+import { MemorySecretStore } from './secrets'
 
 export const DEFAULT_PROBE_TIMEOUT_MS = 10_000
 
@@ -62,6 +65,26 @@ export async function probeConnector(
   } finally {
     if (timer) clearTimeout(timer)
     await client.close().catch(() => {})
+  }
+}
+
+/** Probe a candidate Key on an isolated gateway so live mounts keep using the previous credential. */
+export async function probeApiKeyConnector(
+  id: string,
+  connector: StoredConnector,
+  key: string,
+  options: ProbeOptions = {},
+): Promise<ConnectorProbeResult> {
+  const secrets = new MemorySecretStore()
+  await secrets.write(id, { v: 1, apiKey: key })
+  const gateway = await CredentialGateway.start({
+    getConnector: requested => requested === id ? connector : undefined,
+    secrets,
+  })
+  try {
+    return await probeConnector(id, gateway.endpoint(id), options)
+  } finally {
+    await gateway.close()
   }
 }
 

@@ -2,7 +2,7 @@ import { createServer } from 'node:http'
 import { setTimeout as delay } from 'node:timers/promises'
 import { afterEach, describe, expect, it } from 'vitest'
 import { CredentialGateway } from '../packages/connector-hub/src/host/gateway'
-import { probeConnector } from '../packages/connector-hub/src/host/health'
+import { probeApiKeyConnector, probeConnector } from '../packages/connector-hub/src/host/health'
 import { MemorySecretStore } from '../packages/connector-hub/src/host/secrets'
 
 const cleanups = []
@@ -38,6 +38,16 @@ describe('probeConnector', () => {
     expect(result.error).toContain('Invalid API Key')
     expect(result.error).not.toContain('wrong-secret')
     expect(await fixture.secrets.read('test-map')).toEqual({ v: 1, apiKey: 'wrong-secret' })
+  })
+
+  it('probes a candidate Key on an isolated gateway without changing the live secret store', async () => {
+    const fixture = await startFixture('header')
+    const result = await probeApiKeyConnector('test-map', fixture.connector, 'candidate-secret')
+
+    // The fixture accepts only its live Key, proving the candidate used a separate gateway and store.
+    expect(result.ok).toBe(false)
+    expect(result.error).toContain('Invalid API Key')
+    expect(await fixture.secrets.read('test-map')).toEqual({ v: 1, apiKey: 'api-secret' })
   })
 
   it('bounds a stalled probe and returns a safe timeout summary', async () => {
@@ -122,7 +132,7 @@ async function startFixture(mode, options = {}) {
     secrets,
   })
   cleanups.push(() => gateway.close())
-  return { gateway, secrets, methods }
+  return { gateway, secrets, methods, connector }
 }
 
 async function readJson(request) {
