@@ -1,0 +1,6 @@
+{
+  "client_id": "CIul0o4i8rMwnA",
+  "client_name": "DSH Connector Hub",
+  "token_endpoint_auth_method": "none",
+  "registered_redirect_uri": "http://127.0.0.1:43118/oauth/callback/xmind-cn"
+}

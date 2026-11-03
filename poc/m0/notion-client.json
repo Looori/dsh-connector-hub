@@ -1,0 +1,17 @@
+{
+  "client_id": "https://looori.github.io/dsh-connector-hub/oauth/notion/client.json",
+  "client_name": "DSH Connector Hub",
+  "client_uri": "https://looori.github.io/dsh-connector-hub/",
+  "redirect_uris": [
+    "http://127.0.0.1:43117/oauth/callback/notion"
+  ],
+  "grant_types": [
+    "authorization_code",
+    "refresh_token"
+  ],
+  "response_types": [
+    "code"
+  ],
+  "token_endpoint_auth_method": "none",
+  "application_type": "native"
+}

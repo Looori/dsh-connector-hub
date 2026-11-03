@@ -18,6 +18,7 @@ import { randomUUID } from 'node:crypto'
 import { createRequire } from 'node:module'
 import * as mcpClient from '@deepseek-ai/dsh-mcp-client'
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
+import { createM0Gateway } from './m0-gateway'
 
 const require = createRequire(import.meta.url)
 const KEYCHAIN_SERVICE = 'dsh-connector-hub-poc'
@@ -89,6 +90,10 @@ export const name = 'connector-hub-poc'
 export function apply(ctx: HostContext): void {
   ctx.logger.info('connector-hub-poc: loaded in %s (electron %s)', process.execPath, process.versions.electron ?? 'none')
 
+  const gateway = createM0Gateway()
+  const endpoint = gateway?.url ?? SERVER_URL
+  ctx.effect(() => () => gateway?.close(), 'connector-hub-poc: M0 gateway')
+
   let generation = 0
   let current = mount()
 
@@ -98,8 +103,8 @@ export function apply(ctx: HostContext): void {
     const fiber = ctx.plugin(mcpClient, {
       serverName: SERVER_NAME,
       transport: 'streamable-http',
-      url: SERVER_URL,
-      headers: { 'X-Connector-Token': token },
+      url: endpoint,
+      headers: gateway?.headers ?? { 'X-Connector-Token': token },
       failOnStartupError: true,
     })
     const record: Mount = { fiber, generation, token, mountedAt: new Date().toISOString(), settled: false }
@@ -125,7 +130,7 @@ export function apply(ctx: HostContext): void {
     const global = globalToolNames()
     const fiberState = FIBER_STATES[current.fiber.state] ?? String(current.fiber.state)
     return {
-      connector: { serverName: SERVER_NAME, url: SERVER_URL },
+      connector: { serverName: SERVER_NAME, url: endpoint },
       status: deriveStatus(fiberState, current, global),
       fiberState,
       generation: current.generation,

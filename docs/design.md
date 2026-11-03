@@ -1,7 +1,7 @@
 # dsh-connector-hub 一期设计
 
 - 日期：2026-10-29
-- 状态：一期设计依据。标注「待 spike」的部分，要等 M0 验证完才算最终方案。
+- 状态：一期设计依据；M0 已于 2026-11-03 完成技术验证，网关与共享 OAuth 客户端结论已写回本文。
 - 目标版本：DeepSeek Harness 0.2.1-rc.5（2026-11-02 由 rc.3 改为 rc.5，见 §3 末尾）
 - 参考：[PoC 结果](../poc/README.md)
 
@@ -67,7 +67,7 @@ PoC 验证过的（详见 [poc/README.md](../poc/README.md)）：
 - 两个版本之间只改了十来个源文件，集中在聊天里推理内容的显示上。插件用到的接口都没变：tools、agents、`connection.fetch`、Plugins 页插槽、`ui-primitives`、`home-paths`、出网代理。
 - mcp-client 只改了一处：服务器没声明 resources 能力时，不再去请求资源列表。`streamable-http` 的配置项和 rc.3 完全一样，仍然只有静态 `headers`，§4.2 的结论不变。
 - rc.5 依赖的 `@deepseek-ai/cordis` 仍是 `~4.0.5`，`@modelcontextprotocol/client` 仍是 2.2.0。npm 上 `@deepseek-ai/dsh-*@0.2.1-rc.5` 各包齐全，可以直接作为类型依赖。
-- 以上只是源码层面的核对。PoC 在 rc.5 上的运行结果还没有重跑，列为 M0 的 ⓪。
+- M0 已在 rc.5 实测：dsh web 自动及 UI 冒烟、Desktop 手动冒烟均通过；未登录路由 401，钥匙串读写删除成功，试连成功，卸载时工具消失，重挂后工具名不变；三个 Desktop 会话均能看到两个 PoC 工具。Desktop 的 `window.open` 已由用户确认交给系统 Chrome。
 
 ## 4. 总体架构
 
@@ -92,7 +92,7 @@ dsh-mcp-client ──► http://127.0.0.1:<端口>/c/<id>/mcp ──► gateway 
 
 浏览器端只负责界面，所有状态都在 Host：目录、配置、密钥、挂载。浏览器端通过 `api/connector-hub/*` 读状态、发起操作。接口返回的内容里永远不含 token 和 Key。用户填写的 API Key 只在保存那一次随请求发给 Host。
 
-### 4.2 本地凭据网关（推荐，待 spike）
+### 4.2 本地凭据网关（M0 已验证）
 
 **问题：** rc.3 到 rc.5 的 mcp-client 都只接受静态请求头，想把新 token 送过去，只能卸载再挂载。Xmind 的 access token 有效期只有 1 小时，这意味着每小时都要重新挂载一次。而 PoC 已经看到，重新挂载期间工具列表是空的。如果此时会话正好发起请求，模型会看到工具消失又出现，DSH 还会把这个变化写进会话；正在执行的工具调用也会失败。另外，高德把 Key 放在 URL 查询参数里，直接写进 mcp-client 配置的话，Key 可能随 URL 出现在报错和日志里。
 
@@ -105,7 +105,7 @@ dsh-mcp-client ──► http://127.0.0.1:<端口>/c/<id>/mcp ──► gateway 
 
 **效果：** 刷新 token 不需要重新挂载；密钥不会进入 mcp-client 配置、DSH 配置和日志；试连和真实调用走的是同一条路径，凭据错误也能试出来。
 
-**代价和退路：** 大约 200 行代码，外加流式转发的测试。M0 要验证 Streamable HTTP（含 SSE）经网关转发能正常工作。如果验证不通过，退回到把请求头直接写进 mcp-client 配置的做法：刷新后重新挂载，并尽量挑会话空闲的时候做。
+**M0 结论：** 未带密钥返回 403、未知路径返回 404，POST、GET/SSE、DELETE 均成功转发；非 loopback 上游请求全部经过模拟 DSH 代理，loopback 请求保持直连。采用网关方案，不再使用刷新后重挂的退路。限制是 rc.5 mcp-client 卸载时不会主动发 DELETE，DELETE 由当前 MCP 会话直接请求网关验证。
 
 为什么不把 `authProvider` 交给 mcp-client：rc.3 到 rc.5 的 mcp-client 都不接受这个参数，我们又改不了 DSH。
 
@@ -140,7 +140,14 @@ dsh-mcp-client ──► http://127.0.0.1:<端口>/c/<id>/mcp ──► gateway 
       "publisher": "Xmind",
       "official": true,
       "remote": { "type": "streamable-http", "url": "https://app.xmind.cn/api/mcp" },
-      "auth": { "type": "oauth", "scope": "openid mcp:connect" }
+      "auth": {
+        "type": "oauth",
+        "scope": "openid mcp:connect",
+        "clientId": "CIul0o4i8rMwnA",
+        "callbackPath": "/oauth/callback/xmind-cn",
+        "portPolicy": "fixed",
+        "fixedPort": 43118
+      }
     },
     {
       "id": "amap",
@@ -155,7 +162,7 @@ dsh-mcp-client ──► http://127.0.0.1:<端口>/c/<id>/mcp ──► gateway 
 
 | `auth.type` | 字段 | 说明 |
 |---|---|---|
-| `oauth` | `scope`（可选）、`authorizationParams`（可选，JSON 对象） | 授权地址、Token 地址、Issuer、客户端都在运行时按 MCP 规范发现，目录里只写发现不到或需要覆盖的值 |
+| `oauth` | `scope`、`authorizationParams`（可选）、`clientId` 或 `clientMetadataUrl`、`callbackPath`、`portPolicy`、`fixedPort`（固定端口时） | 授权地址、Token 地址和 Issuer 在运行时按 MCP 规范发现；目录提供共享公共客户端身份和按服务商实测固化的端口策略 |
 | `api-key` | `in`（`header` / `query`）、`name`、`label`、`helpUrl` | 用户在 tab 里填写，存进钥匙串，由网关注入 |
 | `none` | — | 公开服务，不需要凭据 |
 
@@ -165,7 +172,7 @@ dsh-mcp-client ──► http://127.0.0.1:<端口>/c/<id>/mcp ──► gateway 
 - `publisher` 是运营这个 MCP 服务的公司或组织，显示为卡片上的「by …」。`official: true` 表示服务由服务商自己运营，卡片上显示「官方服务」（§9.1）。
 - 远程地址必须是 `https`。只有测试用的 loopback 地址允许 `http`。
 - 插件忽略不认识的字段。遇到不认识的 `auth.type`，在 tab 里显示「需要更新插件」。
-- 目录里永远不放任何密钥，也不放 client_id（理由见 §6.2）。
+- 目录里永远不放 token、API Key、client secret 或注册管理凭证。公开的 `clientId` 和 CIMD URL 不是密钥，可以放在目录里（§6.2）。
 
 ### 5.3 目录的信任边界
 
@@ -187,28 +194,33 @@ dsh-mcp-client ──► http://127.0.0.1:<端口>/c/<id>/mcp ──► gateway 
 
 流程是 MCP 授权规范规定的授权码 + PKCE：
 
-1. 用户在弹窗里点「前往授权」（§9.3）。Host 在 `127.0.0.1` 起一个临时回调服务，路径是 `/oauth/callback`，优先使用固定端口，被占用时改用随机端口。
-2. Host 调用 SDK 的 `auth(provider, { serverUrl, scope })`。SDK 先发现元数据：拿到 401 响应头里的 `resource_metadata`，再读受保护资源元数据和授权服务器元数据。还没有客户端时，SDK 做动态注册，然后生成 PKCE 参数并带上 `resource`。最后它调用 `redirectToAuthorization(url)`，我们把这个地址交给浏览器端。
-3. 浏览器端打开授权页。dsh web 里用 `window.open`，点击时先同步打开空白窗口，拿到地址后再跳转（§9.3）。Desktop 里的行为还没验证（待 spike）：可能用系统浏览器打开，也可能被拦截。退路是显示链接和「复制」按钮。回调发到 Host 所在机器的 loopback 地址，所以本机上的任何浏览器都能完成授权。
-4. 服务商把浏览器带回 `http://127.0.0.1:<端口>/oauth/callback?code&state&iss`。Host 校验 `state`（随机生成、只能用一次、10 分钟过期），再调用 `auth(provider, { serverUrl, authorizationCode, iss })`。回调里有 `iss` 时，SDK 会按 RFC 9207 校验；Notion 带，Xmind 不带。之后 SDK 用 PKCE 换取 token，再调用 `saveTokens` 写进钥匙串。回调页显示「已连接，可以关闭此页」。
+1. 用户在弹窗里点「前往授权」（§9.3）。Host 在 `127.0.0.1` 起一个临时回调服务，路径按服务商隔离为 `/oauth/callback/notion` 或 `/oauth/callback/xmind-cn`。支持变端口的服务商直接监听端口 `0`；只接受完整登记 URI 的服务商使用目录中固化的端口，绑定失败时明确报错，不尝试随机端口。
+2. Host 调用 SDK 的 `auth(provider, { serverUrl, scope })`。SDK 发现受保护资源和授权服务器元数据，生成 PKCE 参数并带上 `resource`。provider 通过 `clientMetadataUrl` 或 `clientInformation()` 注入共享公共客户端，禁止进入每实例动态注册分支。
+3. 浏览器端打开授权页。dsh web 里用 `window.open`，点击时先同步打开空白窗口，拿到地址后再跳转（§9.3）。M0 已确认 Desktop 的 `window.open` 会交给系统 Chrome；界面仍保留「复制授权链接」作为打不开时的退路。回调发到 Host 所在机器的 loopback 地址，所以本机上的任何浏览器都能完成授权。
+4. 服务商把浏览器带回本次实际的 `redirect_uri`，附带 `code`、`state`，以及服务商支持时的 `iss`。Host 校验 `state`（随机生成、只能用一次、10 分钟过期），再调用 `auth(provider, { serverUrl, authorizationCode, iss })`；授权请求和换 token 必须使用完全相同的 `redirect_uri`。之后 SDK 用 PKCE 换取 token，再调用 `saveTokens` 写进钥匙串。回调页显示「已连接，可以关闭此页」。
 5. 回调服务随即关闭，Host 把连接器写入 `connectors.json` 并挂载 mcp-client。授权超过 10 分钟没完成，或者用户取消，就按失败处理，回调服务同样关闭，配置里不留任何记录。
 
-**客户端注册：每台机器各自动态注册。**
+**客户端注册：所有用户共享公共客户端。**
 
-- 目录公开放在网上，我们又没有后端服务，没法安全地分发共享的 client_secret。按 RFC 8252，本地应用应当注册为公共客户端，靠 PKCE 保证安全。
-- 注册时优先选 `token_endpoint_auth_method: none`；服务商不支持 `none` 时，才用 `client_secret_post`。Notion 三种都支持，Xmind 只支持 `none`。
-- `client_name` 填 `DSH Connector Hub`，`redirect_uris` 填本次的 loopback 回调地址（用 `127.0.0.1`，不用 `localhost`）。
-- 注册结果存进钥匙串，和 token 存在一起。下次授权时，回调地址没变就复用这个客户端；变了才重新注册。
-- 附件里的 client_id 是另一个产品注册的，绑定的是它自己的回调地址，我们用不了，也不放进目录。
-- Notion 注册后不提供管理凭证，客户端事后改不了也删不了。所以不要无谓地重复注册：尽量用固定端口，让回调地址保持不变。
-- 待 spike：Notion 和 Xmind 是否接受 `http://127.0.0.1:<端口>` 形式的回调地址，以及换了端口能否不重新注册。
-- 以后可选：Notion 声明支持 client ID 元数据文档（`client_id_metadata_document_supported: true`）。我们可以在 GitHub Pages 上发布一份客户端元数据文档，对支持它的服务商省掉动态注册。一期不做。
+- 每个服务商只有一个客户端，所有用户共用公开的客户端身份；`token_endpoint_auth_method` 固定为 `none`，不分发或保存共享 `client_secret`。共享客户端不等于共享用户授权，token 仍只存在用户自己的机器上。
+- 公共客户端身份是目录配置的一部分，不是密钥。Notion 的 `client_id` 是 CIMD 的 HTTPS URL；Xmind 的公开 `client_id` 由目录的 OAuth 配置提供。旧方案「目录不放 client_id、每台机器动态注册」已由 2026-11-02 的决策替代。
+- Notion 使用 `https://looori.github.io/dsh-connector-hub/oauth/notion/client.json`，文档不包含 secret。M0 已确认 SDK 采用该 CIMD，动态注册调用为 0。
+- Xmind 没有另行使用管理入口，M0 经 `https://app.xmind.cn/api/oauth/register` 只创建一次名为 `DSH Connector Hub` 的公共客户端。注册响应即使含 secret 或管理凭证也不保存；运行时禁止再次动态注册。
+
+**loopback 端口策略（M0 实测）：**
+
+| 服务商 | 最终策略 | 实测结论 |
+|---|---|---|
+| Notion | 随机端口 | CIMD 客户端接受随机端口；真实授权、token 交换、刷新和刷新前后 MCP 试连均通过，无需固定端口退路 |
+| Xmind | 固定 `43118` | 随机端口在登录时报 `redirect_uri is not registered for this client`；登记 URI `http://127.0.0.1:43118/oauth/callback/xmind-cn` 的完整流程通过；端口占用会在打开授权页前明确报错 |
+
+端口策略按服务商固化在目录中，不作为普通用户设置，也不在授权失败后盲目切换策略或创建新客户端。
 
 **Token 刷新：**
 
 - 网关负责刷新：access token 剩不到 5 分钟时主动刷新，或者上游返回 401 时刷新。
 - 刷新前，先拿到跨进程文件锁 `$DSH_HOME/connector-hub/locks/<id>.lock`：用独占方式创建文件，写入 pid；超过 30 秒视为陈旧锁。拿到锁后重新读一次钥匙串，如果别的进程已经刷新过，就直接用新 token。这样 Desktop 和 dsh web 同时运行时，不会互相作废对方的 refresh token。
-- 刷新成功后立即把新的 refresh token 写回钥匙串。Xmind 每次刷新都发新的 refresh token，旧的立即作废，没有宽限期；Notion 的旧 refresh token 还能再用一次。按更严格的 Xmind 规则实现，两家都适用。
+- 刷新成功后立即把新的 refresh token 写回钥匙串，按旧 refresh token 可能立即作废的严格规则实现。M0 已实测 Notion 刷新成功，Xmind 刷新后 refresh token 发生轮换，两家刷新后 MCP 试连均成功。
 - 返回 `invalid_grant` 时，状态改为「需要重新授权」，卸载这个连接器的 mcp-client，不让模型继续调用注定失败的工具。钥匙串里的条目保留，用户重新授权时会被覆盖。
 
 **授权账号显示：** Notion 换 token 的响应里直接带工作区和用户信息；Xmind 要请求 `openid` scope，从 `id_token` 的 `name` 字段读取。这些信息只用来显示，不用来做安全判断。如果 `name` 看起来是手机号，就打码，只显示前 3 位和后 4 位。
@@ -243,7 +255,7 @@ dsh-mcp-client ──► http://127.0.0.1:<端口>/c/<id>/mcp ──► gateway 
 
 ### 7.2 密钥
 
-- 存在系统钥匙串：service 是 `dsh-connector-hub`，account 是连接器 id。值是一段紧凑 JSON：`{v, client: {client_id, client_secret?, redirect_uri, issuer}, tokens: {access_token, refresh_token?, expires_at, scope?}, account?}`；API Key 连接器只存 `{v, apiKey}`。
+- 存在系统钥匙串：service 是 `dsh-connector-hub`，account 是连接器 id。OAuth 值是一段紧凑 JSON：`{v, tokens: {access_token, refresh_token?, expires_at, scope?}, account?}`；API Key 连接器只存 `{v, apiKey}`。共享客户端身份和端口策略来自普通配置，不写入钥匙串，也不保存 client secret。
 - Windows 不在一期范围。以后支持时要注意：Windows 的凭据管理器单条大约只能存 2.5 KB，要先实测 Notion 和 Xmind 的 token 有多大，超限时把客户端信息和 token 拆成两条存。
 - macOS 的授权弹窗：Desktop 和 Desktop 自带的 CLI 是同一个 Electron 程序，不会弹框。用 npm 安装的 dsh 跑在系统 Node 上，第一次读取 Desktop 创建的条目时会弹一次，选「始终允许」后就不再弹。
 - 日志和状态接口里不出现任何密钥。URL 里的查询参数一律打码。
@@ -404,7 +416,7 @@ dsh-connector-hub/              pnpm 工作区，Node 24
    - 目录：Schema 校验、解析、不认识的字段和认证类型；
    - store：原子写、`schemaVersion` 迁移、对账；
    - 网关：鉴权、请求头过滤、流式转发（含 SSE）、401 后刷新再重试、4 MB 上限；
-   - OAuth：用模拟授权服务器测动态注册、PKCE、`state` 和 `iss` 校验、两种刷新规则（立即作废、有宽限）；
+   - OAuth：用模拟授权服务器测 CIMD／共享客户端注入、禁止每实例动态注册、随机与固定端口、PKCE、`state` 和 `iss` 校验、refresh token 轮换；
    - 跨进程锁：两个进程同时刷新时，只发出一次刷新请求；
    - 状态判定；
    - 接口：只接受目录里的 id，拒绝未知 id 和多余字段；试连失败时不写配置、不存 Key；
@@ -432,7 +444,7 @@ dsh-connector-hub/              pnpm 工作区，Node 24
 
 | 阶段 | 内容 | 完成标准 |
 |---|---|---|
-| M0 spike | ⓪ 在 rc.5 的 Desktop 和 dsh web 上重跑 PoC 冒烟；① Notion 和 Xmind 接受 `127.0.0.1` 回调地址的动态注册；② Desktop 里 `window.open` 打开授权页的行为；③ 网关转发 Streamable HTTP（含 SSE），并且出网走 DSH 的代理 | 每项有结论，写回本文 |
+| M0 spike | ⓪ 在 rc.5 的 Desktop 和 dsh web 上重跑 PoC 冒烟；① Notion、Xmind 的共享公共客户端、回调端口、授权与刷新；② Desktop 的 `window.open`；③ 网关转发 Streamable HTTP（含 SSE）及 DSH 代理 | 每项有结论，写回本文 |
 | M1 骨架 | 工作区、真实类型、目录格式和 4 个条目、目录构建和发布脚本、store、secrets、网关 | 单元测试通过，Pages 上能拉到目录 |
 | M2 API Key | 「我的」「发现」两页和添加弹窗；高德、百度端到端打通：添加、试连、挂载、调用、停用、删除 | 端到端冒烟通过，Desktop 手动验证通过 |
 | M3 OAuth | Notion、Xmind：授权、刷新、跨进程锁、需要重新授权的处理、删除时吊销 | 同上，再加上 token 过期后自动刷新 |
@@ -441,21 +453,20 @@ dsh-connector-hub/              pnpm 工作区，Node 24
 ## 14. 待定事项
 
 - 本仓库（插件代码）什么时候推到 GitHub。目录托管不依赖这件事，已经在 `Looori/looori.github.io` 上线（§5.1）。
-- M0 的结论如果推翻 §4.2 或 §6.2，回来修改本文。
 
 ## 附录 A：第一批连接器
 
-来源：用户提供的连接器清单，以及 2026-10-29 实测的公开元数据。目录里不放任何 Key 和 client_id。
+来源：用户提供的连接器清单、2026-10-29 实测的公开元数据，以及 2026-11-02 至 2026-11-03 的 M0 真实授权结果。目录里不放任何 Key、token 或 secret；公开客户端身份除外。
 
 | id | 名称 | MCP 地址 | 认证 | 要点 |
 |---|---|---|---|---|
-| `notion` | Notion | `https://mcp.notion.com/mcp` | OAuth | 动态注册地址是 `https://mcp.notion.com/register`，认证方式选 `none`；scope 留空（服务商的默认值是 `default`）；回调带 `iss`；access token 有效期 8 小时；有吊销接口；支持 client ID 元数据文档 |
-| `xmind-cn` | Xmind（中国版） | `https://app.xmind.cn/api/mcp` | OAuth | 动态注册地址是 `https://app.xmind.cn/api/oauth/register`，只支持 `none`；目录里必须写 `scope: openid mcp:connect`；回调不带 `iss`；access token 有效期 1 小时；refresh token 刷新后旧的立即作废；授权账号名取自 `id_token` |
+| `notion` | Notion | `https://mcp.notion.com/mcp` | OAuth | CIMD＋随机 loopback 端口；`token_endpoint_auth_method: none`；scope 留空；回调带 `iss`；有吊销接口；M0 授权、刷新及 MCP 试连通过 |
+| `xmind-cn` | Xmind（中国版） | `https://app.xmind.cn/api/mcp` | OAuth | 一次注册的共享公共客户端＋固定端口 `43118`；scope 为 `openid mcp:connect`；回调不带 `iss`；M0 授权、refresh token 轮换及 MCP 试连通过；授权账号名取自 `id_token` |
 | `amap` | 高德地图 | `https://mcp.amap.com/mcp` | API Key，放在查询参数 `key` | 没带 Key 时返回 HTTP 200 加 `INVALID_USER_KEY`，不是 JSON-RPC 响应 |
 | `baidu-map` | 百度地图 | `https://mcp.map.baidu.com/mcp` | API Key，放在请求头 `ak` | 没带 Key 时返回 400 `ak is required` |
 
 补充说明：
 
-- **Notion：** 授权地址是 `https://mcp.notion.com/authorize`，Token 地址是 `https://mcp.notion.com/token`，Issuer 是 `https://mcp.notion.com`，受保护资源是 `https://mcp.notion.com/mcp`。这套授权是 `mcp.notion.com` 自己的，和 notion.so「My integrations」里创建的集成凭证不通用。
-- **Xmind（中国版）：** 授权地址是 `https://app.xmind.cn/oauth/consent`，Token 地址是 `https://app.xmind.cn/api/oauth/token`，Issuer 是 `https://app.xmind.cn`。scope 必须写在目录里：受保护资源元数据里只列了 `mcp:connect`，SDK 自动选择 scope 时不会带上 `openid`，那样就拿不到账号名。中国版和国际版账号不互通，MCP 地址、授权服务器和客户端必须来自同一个区。
+- **Notion：** 授权地址是 `https://mcp.notion.com/authorize`，Token 地址是 `https://mcp.notion.com/token`，Issuer 是 `https://mcp.notion.com`，受保护资源是 `https://mcp.notion.com/mcp`。CIMD 是 `https://looori.github.io/dsh-connector-hub/oauth/notion/client.json`。这套授权是 `mcp.notion.com` 自己的，和 notion.so「My integrations」里创建的集成凭证不通用。
+- **Xmind（中国版）：** 授权地址是 `https://app.xmind.cn/oauth/consent`，Token 地址是 `https://app.xmind.cn/api/oauth/token`，Issuer 是 `https://app.xmind.cn`。共享公开 `client_id` 是 `CIul0o4i8rMwnA`，登记回调是 `http://127.0.0.1:43118/oauth/callback/xmind-cn`。scope 必须写在目录里：受保护资源元数据里只列了 `mcp:connect`，SDK 自动选择 scope 时不会带上 `openid`，那样就拿不到账号名。中国版和国际版账号不互通，MCP 地址、授权服务器和客户端必须来自同一个区。
 - **Key 申请入口（`helpUrl`）：** 高德是 `https://console.amap.com/dev/key/app`，未登录时会先跳到 `lbs.amap.com` 登录；百度是 `https://lbsyun.baidu.com/apiconsole/key`。

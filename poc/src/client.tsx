@@ -188,6 +188,10 @@ function ConnectorsTab({ t }: TabProps): ReactNode {
         <div style={{ display: 'flex', gap: 8 }}>
           <Button variant="ghost" disabled={busy} onClick={() => { void call('api/connector-hub/status', 'GET') }}>{t('runtime')}</Button>
           <Button variant="ghost" disabled={busy} onClick={() => { void call('api/connector-hub/keychain-test', 'POST') }}>{t('keychain')}</Button>
+          <Button variant="ghost" onClick={() => {
+            const opened = window.open('https://example.com/', '_blank')
+            setResult(`M0 window.open → ${opened === null ? 'null（可能被拦截）' : '返回 Window 对象'}；请确认是否由系统浏览器打开 example.com`)
+          }}>M0 测试 window.open</Button>
         </div>
       </section>
 
