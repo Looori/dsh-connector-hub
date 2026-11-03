@@ -1,0 +1,123 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://dsh-connector-hub.local/schema/connector.schema.json",
+  "title": "Connector Hub catalog connector",
+  "type": "object",
+  "required": ["id", "name", "description", "icon", "homepage", "publisher", "official", "remote", "auth"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9-]{1,24}$"
+    },
+    "name": { "$ref": "#/$defs/localizedText" },
+    "description": { "$ref": "#/$defs/localizedText" },
+    "icon": {
+      "type": "string",
+      "pattern": "^data:image/svg\\+xml;base64,[A-Za-z0-9+/]+={0,2}$"
+    },
+    "homepage": {
+      "type": "string",
+      "format": "uri"
+    },
+    "publisher": {
+      "type": "string",
+      "minLength": 1
+    },
+    "official": { "type": "boolean" },
+    "remote": {
+      "type": "object",
+      "required": ["type", "url"],
+      "properties": {
+        "type": { "const": "streamable-http" },
+        "url": {
+          "type": "string",
+          "format": "uri"
+        }
+      }
+    },
+    "auth": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["type", "callbackPath", "portPolicy"],
+          "properties": {
+            "type": { "const": "oauth" },
+            "scope": { "type": "string" },
+            "authorizationParams": {
+              "type": "object",
+              "additionalProperties": { "type": "string" }
+            },
+            "clientId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "clientMetadataUrl": {
+              "type": "string",
+              "format": "uri"
+            },
+            "callbackPath": {
+              "type": "string",
+              "pattern": "^/"
+            },
+            "portPolicy": { "enum": ["random", "fixed"] },
+            "fixedPort": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535
+            }
+          },
+          "oneOf": [
+            {
+              "required": ["clientId"],
+              "properties": { "clientId": true }
+            },
+            {
+              "required": ["clientMetadataUrl"],
+              "properties": { "clientMetadataUrl": true }
+            }
+          ]
+        },
+        {
+          "type": "object",
+          "required": ["type", "in", "name", "label", "helpUrl"],
+          "properties": {
+            "type": { "const": "api-key" },
+            "in": { "enum": ["header", "query"] },
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "label": { "$ref": "#/$defs/localizedText" },
+            "helpUrl": {
+              "type": "string",
+              "format": "uri"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type"],
+          "properties": {
+            "type": { "const": "none" }
+          }
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "localizedText": {
+      "type": "object",
+      "required": ["zh", "en"],
+      "properties": {
+        "zh": {
+          "type": "string",
+          "minLength": 1
+        },
+        "en": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

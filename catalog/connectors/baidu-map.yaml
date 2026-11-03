@@ -1,0 +1,22 @@
+id: baidu-map
+name:
+  zh: 百度地图
+  en: Baidu Maps
+description:
+  zh: 查询地点、地理编码、路线和行政区划等百度地图服务。
+  en: Query places, geocoding, routes, administrative areas, and other Baidu Maps services.
+icon: data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTQiIGZpbGw9IiMyOTMyZmYiLz48Y2lyY2xlIGN4PSIyMyIgY3k9IjI1IiByPSI3IiBmaWxsPSJ3aGl0ZSIvPjxjaXJjbGUgY3g9IjQxIiBjeT0iMjUiIHI9IjciIGZpbGw9IndoaXRlIi8+PHBhdGggZD0iTTE1IDQzYzAtOCAzNC04IDM0IDAgMCA3LTcgMTAtMTcgMTBTMTUgNTAgMTUgNDN6IiBmaWxsPSJ3aGl0ZSIvPjwvc3ZnPg==
+homepage: https://lbsyun.baidu.com
+publisher: 百度地图
+official: true
+remote:
+  type: streamable-http
+  url: https://mcp.map.baidu.com/mcp
+auth:
+  type: api-key
+  in: header
+  name: ak
+  label:
+    zh: 百度地图 AK
+    en: Baidu Maps AK
+  helpUrl: https://lbsyun.baidu.com/apiconsole/key

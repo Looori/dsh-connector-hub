@@ -1,0 +1,21 @@
+id: xmind-cn
+name:
+  zh: Xmind（中国版）
+  en: Xmind (China)
+description:
+  zh: 读取和管理 Xmind 中国版账号中的思维导图。
+  en: Read and manage mind maps in your Xmind China account.
+icon: data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTQiIGZpbGw9IiNlZjViNWIiLz48cGF0aCBkPSJNMTggMTZsMjggMzJNNDYgMTZMMTggNDgiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS13aWR0aD0iOCIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+PC9zdmc+
+homepage: https://xmind.cn
+publisher: Xmind
+official: true
+remote:
+  type: streamable-http
+  url: https://app.xmind.cn/api/mcp
+auth:
+  type: oauth
+  scope: openid mcp:connect
+  clientId: CIul0o4i8rMwnA
+  callbackPath: /oauth/callback/xmind-cn
+  portPolicy: fixed
+  fixedPort: 43118
