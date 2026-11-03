@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "revision": "2026-11-03.1",
+  "revision": "2026-11-03.2",
   "connectors": [
     {
       "id": "notion",
@@ -104,13 +104,42 @@
       },
       "auth": {
         "type": "api-key",
-        "in": "header",
+        "in": "query",
         "name": "ak",
         "label": {
           "zh": "百度地图 AK",
           "en": "Baidu Maps AK"
         },
         "helpUrl": "https://lbsyun.baidu.com/apiconsole/key"
+      }
+    },
+    {
+      "id": "tencent-docs",
+      "name": {
+        "zh": "腾讯文档",
+        "en": "Tencent Docs"
+      },
+      "description": {
+        "zh": "通过腾讯文档 MCP 访问和处理你的文档内容。",
+        "en": "Access and work with your Tencent Docs content through MCP."
+      },
+      "icon": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTQiIGZpbGw9IiMyYjdmZmYiLz48cGF0aCBkPSJNMjAgMTJoMTdsOSA5djMxSDIweiIgZmlsbD0id2hpdGUiLz48cGF0aCBkPSJNMzcgMTJ2MTBoOSIgZmlsbD0iI2JjZDdmZiIvPjxwYXRoIGQ9Ik0yNiAzMGgxNE0yNiAzN2gxNE0yNiA0NGgxMCIgc3Ryb2tlPSIjMmI3ZmZmIiBzdHJva2Utd2lkdGg9IjMiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPjwvc3ZnPg==",
+      "homepage": "https://docs.qq.com",
+      "publisher": "腾讯文档",
+      "official": true,
+      "remote": {
+        "type": "streamable-http",
+        "url": "https://docs.qq.com/openapi/mcp"
+      },
+      "auth": {
+        "type": "api-key",
+        "in": "header",
+        "name": "Authorization",
+        "label": {
+          "zh": "Authorization",
+          "en": "Authorization"
+        },
+        "helpUrl": "https://docs.qq.com/open/document/mcp/"
       }
     }
   ]

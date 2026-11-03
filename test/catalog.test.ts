@@ -18,17 +18,17 @@ function changedCatalog(change) {
 }
 
 describe('initial connector catalog', () => {
-  it('contains exactly the four verified connectors in display order', () => {
+  it('contains exactly the five configured connectors in display order', () => {
     expect(validateCatalog(catalog)).toEqual([])
     expect(catalog.schemaVersion).toBe(1)
-    expect(catalog.revision).toBe('2026-11-03.1')
+    expect(catalog.revision).toBe('2026-11-03.2')
     expect(catalog.connectors.map(connector => connector.id)).toEqual([
-      'notion', 'xmind-cn', 'amap', 'baidu-map',
+      'notion', 'xmind-cn', 'amap', 'baidu-map', 'tencent-docs',
     ])
   })
 
-  it('preserves the M0 OAuth and API Key configuration', () => {
-    const [notion, xmind, amap, baidu] = catalog.connectors
+  it('preserves the M0 OAuth and current API Key configuration', () => {
+    const [notion, xmind, amap, baidu, tencentDocs] = catalog.connectors
     expect(notion.auth).toMatchObject({
       type: 'oauth',
       scope: '',
@@ -43,7 +43,11 @@ describe('initial connector catalog', () => {
       fixedPort: 43118,
     })
     expect(amap.auth).toMatchObject({ type: 'api-key', in: 'query', name: 'key' })
-    expect(baidu.auth).toMatchObject({ type: 'api-key', in: 'header', name: 'ak' })
+    expect(baidu.auth).toMatchObject({ type: 'api-key', in: 'query', name: 'ak' })
+    expect(tencentDocs).toMatchObject({
+      remote: { type: 'streamable-http', url: 'https://docs.qq.com/openapi/mcp' },
+      auth: { type: 'api-key', in: 'header', name: 'Authorization' },
+    })
   })
 
   it('allows unknown non-sensitive fields for forward compatibility', () => {

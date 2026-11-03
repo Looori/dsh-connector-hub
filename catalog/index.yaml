@@ -1,7 +1,8 @@
 schemaVersion: 1
-revision: 2026-11-03.1
+revision: 2026-11-03.2
 connectors:
   - notion
   - xmind-cn
   - amap
   - baidu-map
+  - tencent-docs

@@ -14,7 +14,7 @@ remote:
   url: https://mcp.map.baidu.com/mcp
 auth:
   type: api-key
-  in: header
+  in: query
   name: ak
   label:
     zh: 百度地图 AK

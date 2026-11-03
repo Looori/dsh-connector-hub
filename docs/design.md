@@ -35,7 +35,7 @@ dsh web 和 DeepSeek Harness Desktop 都要支持。DSH 仓库不接受社区 MR
 | 7 | UI 位置 | Plugins 页的 tab，分「我的」和「发现」两页（§9） |
 | 8 | 版本兼容 | 按 0.2.1-rc.5 实现。`engines.dsh` 写 `>=0.2.1-rc.5 <0.3.0`，CI 同时测 rc.5 和 npm 的 `next` 标签。2026-11-02 由 rc.3 改为 rc.5：Desktop 已自动更新到 rc.5，npm 的 `latest` 和 `next` 也都指向 rc.5 |
 | 9 | 包名 | `dsh-connector-hub`，不带 scope。2026-10-29 查过，npmjs 上还没人用这个名字 |
-| 10 | 第一批连接器 | Notion、Xmind（中国版）、高德地图、百度地图（附录 A）。一期不接 Xmind 国际版 |
+| 10 | 第一批连接器 | Notion、Xmind（中国版）、高德地图、百度地图、腾讯文档（附录 A）。一期不接 Xmind 国际版 |
 | 11 | 工程结构 | pnpm 工作区（§11） |
 | 12 | 测试 | 单元测试、自动端到端冒烟、Desktop 手动检查清单，三层（§12） |
 | 13 | 平台 | 一期只支持 macOS |
@@ -432,7 +432,7 @@ dsh-connector-hub/              pnpm 工作区，Node 24
    - 不调用真实模型，也不连真实服务商。
 3. **Desktop 手动检查清单（每个版本做一次）**
    - 在 Plugins 页从 npm 安装插件；
-   - 在「发现」页依次添加 Notion、Xmind、高德、百度，各让模型调用一次工具；
+   - 在「发现」页依次添加 Notion、Xmind、高德、百度、腾讯文档，各让模型调用一次工具；
    - 在「我的」页停用一个连接器，确认新消息里模型看不到它的工具；再启用，工具恢复；
    - 用调试开关让 Xmind 的 token 提前过期，确认能自动刷新；
    - 同时打开 dsh web，确认两边都能用，并且没有互相作废 token；
@@ -446,7 +446,7 @@ dsh-connector-hub/              pnpm 工作区，Node 24
 |---|---|---|
 | M0 spike | ⓪ 在 rc.5 的 Desktop 和 dsh web 上重跑 PoC 冒烟；① Notion、Xmind 的共享公共客户端、回调端口、授权与刷新；② Desktop 的 `window.open`；③ 网关转发 Streamable HTTP（含 SSE）及 DSH 代理 | 每项有结论，写回本文 |
 | M1 骨架 | 工作区、真实类型、目录格式和 4 个条目、目录构建和发布脚本、store、secrets、网关 | 单元测试通过，Pages 上能拉到目录 |
-| M2 API Key | 「我的」「发现」两页和添加弹窗；高德、百度端到端打通：添加、试连、挂载、调用、停用、删除 | 端到端冒烟通过，Desktop 手动验证通过 |
+| M2 API Key | 「我的」「发现」两页和添加弹窗；高德、百度、腾讯文档端到端打通：添加、试连、挂载、调用、停用、删除 | 端到端冒烟通过，Desktop 手动验证通过 |
 | M3 OAuth | Notion、Xmind：授权、刷新、跨进程锁、需要重新授权的处理、删除时吊销 | 同上，再加上 token 过期后自动刷新 |
 | M4 发布 | 界面打磨、中英文、CI 矩阵、README，发布 `dsh-connector-hub@0.1.0` | 按检查清单从 npm 安装验证通过 |
 
@@ -463,10 +463,11 @@ dsh-connector-hub/              pnpm 工作区，Node 24
 | `notion` | Notion | `https://mcp.notion.com/mcp` | OAuth | CIMD＋随机 loopback 端口；`token_endpoint_auth_method: none`；scope 留空；回调带 `iss`；有吊销接口；M0 授权、刷新及 MCP 试连通过 |
 | `xmind-cn` | Xmind（中国版） | `https://app.xmind.cn/api/mcp` | OAuth | 一次注册的共享公共客户端＋固定端口 `43118`；scope 为 `openid mcp:connect`；回调不带 `iss`；M0 授权、refresh token 轮换及 MCP 试连通过；授权账号名取自 `id_token` |
 | `amap` | 高德地图 | `https://mcp.amap.com/mcp` | API Key，放在查询参数 `key` | 没带 Key 时返回 HTTP 200 加 `INVALID_USER_KEY`，不是 JSON-RPC 响应 |
-| `baidu-map` | 百度地图 | `https://mcp.map.baidu.com/mcp` | API Key，放在请求头 `ak` | 没带 Key 时返回 400 `ak is required` |
+| `baidu-map` | 百度地图 | `https://mcp.map.baidu.com/mcp` | API Key，放在查询参数 `ak` | 没带 Key 时返回 400 `ak is required` |
+| `tencent-docs` | 腾讯文档 | `https://docs.qq.com/openapi/mcp` | API Key，放在 `Authorization` 请求头 | 配置来自用户提供；真实鉴权与工具调用待 Desktop 验收 |
 
 补充说明：
 
 - **Notion：** 授权地址是 `https://mcp.notion.com/authorize`，Token 地址是 `https://mcp.notion.com/token`，Issuer 是 `https://mcp.notion.com`，受保护资源是 `https://mcp.notion.com/mcp`。CIMD 是 `https://looori.github.io/dsh-connector-hub/oauth/notion/client.json`。这套授权是 `mcp.notion.com` 自己的，和 notion.so「My integrations」里创建的集成凭证不通用。
 - **Xmind（中国版）：** 授权地址是 `https://app.xmind.cn/oauth/consent`，Token 地址是 `https://app.xmind.cn/api/oauth/token`，Issuer 是 `https://app.xmind.cn`。共享公开 `client_id` 是 `CIul0o4i8rMwnA`，登记回调是 `http://127.0.0.1:43118/oauth/callback/xmind-cn`。scope 必须写在目录里：受保护资源元数据里只列了 `mcp:connect`，SDK 自动选择 scope 时不会带上 `openid`，那样就拿不到账号名。中国版和国际版账号不互通，MCP 地址、授权服务器和客户端必须来自同一个区。
-- **Key 申请入口（`helpUrl`）：** 高德是 `https://console.amap.com/dev/key/app`，未登录时会先跳到 `lbs.amap.com` 登录；百度是 `https://lbsyun.baidu.com/apiconsole/key`。
+- **Key 申请入口（`helpUrl`）：** 高德是 `https://console.amap.com/dev/key/app`，未登录时会先跳到 `lbs.amap.com` 登录；百度是 `https://lbsyun.baidu.com/apiconsole/key`；腾讯文档使用官方 MCP 指南 `https://docs.qq.com/open/document/mcp/`。
