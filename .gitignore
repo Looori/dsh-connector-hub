@@ -1,3 +1,7 @@
 node_modules/
 lib/
+dist/
+coverage/
+.dsh/
 .DS_Store
+*.log

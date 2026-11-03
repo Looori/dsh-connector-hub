@@ -1,0 +1,4 @@
+# Register both halves of the external connector hub plugin.
+- insert:
+    - id: connector-hub
+      name: dsh-connector-hub
