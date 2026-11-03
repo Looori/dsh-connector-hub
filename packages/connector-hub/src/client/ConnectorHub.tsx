@@ -201,7 +201,13 @@ export function ConnectorHub({
                     menuOpen={menuId === connector.id}
                     onToggle={() => toggleExpanded(connector.id)}
                     onMenuChange={open => setMenuId(open ? connector.id : null)}
-                    onProbe={() => { void runAction(connector.id, () => api.probe(connector.id)) }}
+                    onProbe={() => { void runAction(connector.id, async () => {
+                      const result = await api.probe(connector.id)
+                      if (!result.lastProbe?.ok) {
+                        await refresh()
+                        throw new Error(result.lastProbe?.error || t('probeFailed'))
+                      }
+                    }, 'probeSucceeded') }}
                     onRemount={() => { void runAction(connector.id, () => api.remount(connector.id)) }}
                     onSetEnabled={enabled => { void runAction(
                       connector.id,

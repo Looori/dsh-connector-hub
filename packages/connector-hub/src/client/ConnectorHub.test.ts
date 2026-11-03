@@ -26,7 +26,7 @@ vi.mock('@deepseek-ai/dsh-client-ui-primitives', () => ({
     : null,
   DisclosureRow: ({ icon, title, open, onToggle, collapsedContent, headerAccessory, children }: any) =>
     createElement('div', null,
-      createElement('button', { onClick: onToggle }, icon, title, collapsedContent),
+      createElement('div', { role: 'button', tabIndex: 0, onClick: onToggle }, icon, title, collapsedContent),
       headerAccessory,
       open ? children : null),
   StateDot: () => createElement('span'),
@@ -198,6 +198,39 @@ describe('connector hub browser UI', () => {
     await waitFor(() => expect(api.connectApiKey).toHaveBeenCalledWith('amap', 'replacement'))
     expect(await screen.findByText('API Key 已更换。')).toBeTruthy()
     expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('shows a success toast after a successful manual probe', async () => {
+    const api = apiFixture([view()])
+    vi.mocked(api.probe).mockResolvedValue(view({ lastProbe: {
+      ok: true, checkedAt: '2026-11-03T09:00:00.000Z', durationMs: 20,
+      tools: ['mcp__amap__maps_geo'], server: null, error: null,
+    } }))
+    renderHub(api)
+    await screen.findByTestId('mine-row-amap')
+
+    await openActions()
+    await userEvent.click(screen.getByRole('menuitem', { name: '试连' }))
+
+    expect(await screen.findByText('试连成功。')).toBeTruthy()
+    expect(api.probe).toHaveBeenCalledWith('amap')
+  })
+
+  it('shows the upstream error instead of a success toast after a failed probe', async () => {
+    const api = apiFixture([view()])
+    vi.mocked(api.probe).mockResolvedValue(view({ status: 'failed', error: 'Invalid API Key', lastProbe: {
+      ok: false, checkedAt: '2026-11-03T09:00:00.000Z', durationMs: 20,
+      tools: [], server: null, error: 'Invalid API Key',
+    } }))
+    renderHub(api)
+    await screen.findByTestId('mine-row-amap')
+
+    await openActions()
+    await userEvent.click(screen.getByRole('menuitem', { name: '试连' }))
+
+    expect(await screen.findByRole('alert')).toHaveProperty('textContent', 'Invalid API Key')
+    expect(screen.queryByText('试连成功。')).toBeNull()
+    expect(api.listConnectors).toHaveBeenCalledTimes(2)
   })
 
   it('disables and enables a connector with lifecycle toasts', async () => {

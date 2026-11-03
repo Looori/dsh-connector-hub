@@ -169,6 +169,13 @@ it('runs the API Key lifecycle through real DSH routes and the browser UI', { ti
     await row.waitFor()
     await row.getByText('Connected', { exact: true }).waitFor()
 
+    const probeResponse = page.waitForResponse(response =>
+      response.url().includes('/api/connector-hub/probe') && response.request().method() === 'POST')
+    await page.getByRole('button', { name: 'Actions: Mock API Key', exact: true }).click()
+    await page.getByRole('menuitem', { name: 'Probe', exact: true }).click()
+    expect((await probeResponse).status()).toBe(200)
+    await page.getByText('Probe succeeded.', { exact: true }).waitFor()
+
     const disableResponse = page.waitForResponse(response => response.url().includes('/api/connector-hub/set-enabled'))
     await page.getByRole('switch', { name: 'Mock API Key', exact: true }).click()
     expect((await disableResponse).status()).toBe(200)
