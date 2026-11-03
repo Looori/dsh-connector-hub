@@ -1,0 +1,117 @@
+{
+  "schemaVersion": 1,
+  "revision": "2026-11-03.1",
+  "connectors": [
+    {
+      "id": "notion",
+      "name": {
+        "zh": "Notion",
+        "en": "Notion"
+      },
+      "description": {
+        "zh": "搜索和读取 Notion 工作区内容，并创建或更新页面。",
+        "en": "Search and read Notion workspace content, and create or update pages."
+      },
+      "icon": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTQiIGZpbGw9IiMxODE4MTgiLz48dGV4dCB4PSIzMiIgeT0iNDQiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtZmFtaWx5PSJBcmlhbCxzYW5zLXNlcmlmIiBmb250LXNpemU9IjM4IiBmb250LXdlaWdodD0iNzAwIiBmaWxsPSJ3aGl0ZSI+TjwvdGV4dD48L3N2Zz4=",
+      "homepage": "https://www.notion.com",
+      "publisher": "Notion",
+      "official": true,
+      "remote": {
+        "type": "streamable-http",
+        "url": "https://mcp.notion.com/mcp"
+      },
+      "auth": {
+        "type": "oauth",
+        "scope": "",
+        "clientMetadataUrl": "https://looori.github.io/dsh-connector-hub/oauth/notion/client.json",
+        "callbackPath": "/oauth/callback/notion",
+        "portPolicy": "random"
+      }
+    },
+    {
+      "id": "xmind-cn",
+      "name": {
+        "zh": "Xmind（中国版）",
+        "en": "Xmind (China)"
+      },
+      "description": {
+        "zh": "读取和管理 Xmind 中国版账号中的思维导图。",
+        "en": "Read and manage mind maps in your Xmind China account."
+      },
+      "icon": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTQiIGZpbGw9IiNlZjViNWIiLz48cGF0aCBkPSJNMTggMTZsMjggMzJNNDYgMTZMMTggNDgiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS13aWR0aD0iOCIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+PC9zdmc+",
+      "homepage": "https://xmind.cn",
+      "publisher": "Xmind",
+      "official": true,
+      "remote": {
+        "type": "streamable-http",
+        "url": "https://app.xmind.cn/api/mcp"
+      },
+      "auth": {
+        "type": "oauth",
+        "scope": "openid mcp:connect",
+        "clientId": "CIul0o4i8rMwnA",
+        "callbackPath": "/oauth/callback/xmind-cn",
+        "portPolicy": "fixed",
+        "fixedPort": 43118
+      }
+    },
+    {
+      "id": "amap",
+      "name": {
+        "zh": "高德地图",
+        "en": "Amap"
+      },
+      "description": {
+        "zh": "查询地点、路线、距离和天气等高德地图服务。",
+        "en": "Query places, routes, distances, weather, and other Amap services."
+      },
+      "icon": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTQiIGZpbGw9IiMyNzgwZmYiLz48cGF0aCBkPSJNMzIgMTJsMTggNDAtMTgtMTAtMTggMTB6IiBmaWxsPSJ3aGl0ZSIvPjwvc3ZnPg==",
+      "homepage": "https://lbs.amap.com",
+      "publisher": "高德地图",
+      "official": true,
+      "remote": {
+        "type": "streamable-http",
+        "url": "https://mcp.amap.com/mcp"
+      },
+      "auth": {
+        "type": "api-key",
+        "in": "query",
+        "name": "key",
+        "label": {
+          "zh": "Web 服务 Key",
+          "en": "Web service key"
+        },
+        "helpUrl": "https://console.amap.com/dev/key/app"
+      }
+    },
+    {
+      "id": "baidu-map",
+      "name": {
+        "zh": "百度地图",
+        "en": "Baidu Maps"
+      },
+      "description": {
+        "zh": "查询地点、地理编码、路线和行政区划等百度地图服务。",
+        "en": "Query places, geocoding, routes, administrative areas, and other Baidu Maps services."
+      },
+      "icon": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTQiIGZpbGw9IiMyOTMyZmYiLz48Y2lyY2xlIGN4PSIyMyIgY3k9IjI1IiByPSI3IiBmaWxsPSJ3aGl0ZSIvPjxjaXJjbGUgY3g9IjQxIiBjeT0iMjUiIHI9IjciIGZpbGw9IndoaXRlIi8+PHBhdGggZD0iTTE1IDQzYzAtOCAzNC04IDM0IDAgMCA3LTcgMTAtMTcgMTBTMTUgNTAgMTUgNDN6IiBmaWxsPSJ3aGl0ZSIvPjwvc3ZnPg==",
+      "homepage": "https://lbsyun.baidu.com",
+      "publisher": "百度地图",
+      "official": true,
+      "remote": {
+        "type": "streamable-http",
+        "url": "https://mcp.map.baidu.com/mcp"
+      },
+      "auth": {
+        "type": "api-key",
+        "in": "header",
+        "name": "ak",
+        "label": {
+          "zh": "百度地图 AK",
+          "en": "Baidu Maps AK"
+        },
+        "helpUrl": "https://lbsyun.baidu.com/apiconsole/key"
+      }
+    }
+  ]
+}
