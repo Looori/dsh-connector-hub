@@ -4,9 +4,9 @@
 
 ## 当前状态
 
-- 当前阶段：**M4 本地发布验收已完成，等待对外发布**（2026-11-04）
-- 下一步：创建公开的 `Looori/dsh-connector-hub` 空仓库并完成 npm 登录；经用户批准后推送代码、发布 npm，再从 npm 做 Desktop 安装验收。
-- 阻塞项：GitHub 目标仓库尚不存在；当前机器未登录 npm。
+- 当前阶段：**M4 已发布，等待 Desktop 从 npm 安装验收**（2026-11-04）
+- 下一步：在 Desktop 从 npm 安装 `dsh-connector-hub@0.1.0`，按 `docs/design.md` §12 完成真实连接器、双进程与凭据清理验收。
+- 阻塞项：无。
 
 ## 里程碑
 
@@ -65,8 +65,9 @@
 
 - [x] ① 发布准备：当前仓库全部历史提交的作者和提交者邮箱已统一为 GitHub noreply，旧引用已清理；其他仓库和全局 Git 配置未修改。英文「我的」tab 按设计改为 `Yours`，取消授权增加独立中英文状态。包版本升至 `0.1.0`，补齐仓库元数据、根 README 和 npm 包 README；新增 macOS CI 的 `0.2.1-rc.5`／`next` 矩阵及手动 npm 发布工作流。19 个测试文件、126 项测试通过，类型检查和构建通过。
 - [x] ② 本地发布包验收：`npm pack` 仅包含 README、两份构建产物、目录快照、patch 和包元数据共 6 个文件，不包含开发调试脚本。tarball 在隔离目录的普通 npm 安装和 DSH `web` profile 安装均成功；安装后版本为 `0.1.0`、内置目录为 5 个连接器，DSH 启动和已认证 `connectors` Host 路由冒烟通过。全程使用临时 `DSH_HOME` 和进程内伪钥匙串，未访问真实凭据。
-- [ ] ③ 对外发布：npm 包名当前未被占用，但目标 GitHub 仓库尚不存在且本机未登录 npm。等待用户创建仓库、完成登录并批准推送和发布。
-- [ ] ④ npm 与 Desktop 验收：发布后再从 npm 安装，按检查清单完成 Desktop 验收。
+- [x] ③ 对外发布：代码已推送到公开仓库 `Looori/dsh-connector-hub`，`dsh-connector-hub@0.1.0` 已发布到官方 npm。Release #2（运行 `41826854259`，提交 `77ccafe`）成功；CI（运行 `41822912457`）的 `0.2.1-rc.5`／`next` 矩阵全部通过。DSH 矩阵安装改用官方 npm（`cb6f119`），发布工作流改用实际的 `NPM_PUBLISH_TOKEN` Secret（`77ccafe`）。
+- [x] ④ npm 安装验收：在全新临时目录从官方 npm 安装 `dsh-connector-hub@0.1.0` 成功，npm 返回的 shasum 与本地 tarball 一致；随后用隔离 `DSH_HOME` 的 `web` profile 完成 DSH 插件安装、启动和已认证 `connectors` Host 路由冒烟。使用进程内伪钥匙串，未访问真实凭据。
+- [ ] ⑤ Desktop 验收：从 npm 安装后，按 `docs/design.md` §12 检查五个连接器的真实模型调用、停用／启用、Xmind 自动刷新、Desktop／web 双进程及删除后的钥匙串清理。
 
 ## 已完成的事项
 

@@ -452,7 +452,7 @@ dsh-connector-hub/              pnpm 工作区，Node 24
 
 ## 14. 待定事项
 
-- 本仓库（插件代码）什么时候推到 GitHub。目录托管不依赖这件事，已经在 `Looori/looori.github.io` 上线（§5.1）。
+当前无待定事项。
 
 ## 附录 A：第一批连接器
 
