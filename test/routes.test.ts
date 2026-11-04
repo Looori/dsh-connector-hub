@@ -3,13 +3,16 @@ import { registerHostRoutes } from '../packages/connector-hub/src/host/routes'
 import { ConnectorHubError } from '../packages/connector-hub/src/host/service'
 
 describe('Host routes', () => {
-  it('registers the M2 catalog, status and API Key lifecycle endpoints', () => {
+  it('registers the catalog, API Key and OAuth lifecycle endpoints', () => {
     const { routes } = routeFixture()
     expect(routes.map(route => [route.path, route.methods[0]])).toEqual([
       ['/api/connector-hub/catalog', 'GET'],
       ['/api/connector-hub/catalog-refresh', 'POST'],
       ['/api/connector-hub/connectors', 'GET'],
       ['/api/connector-hub/api-key-connect', 'POST'],
+      ['/api/connector-hub/oauth-start', 'POST'],
+      ['/api/connector-hub/oauth-status', 'POST'],
+      ['/api/connector-hub/oauth-cancel', 'POST'],
       ['/api/connector-hub/remount', 'POST'],
       ['/api/connector-hub/set-enabled', 'POST'],
       ['/api/connector-hub/probe', 'POST'],
@@ -44,6 +47,28 @@ describe('Host routes', () => {
     expect(service.connectApiKey).not.toHaveBeenCalled()
   })
 
+  it('validates OAuth requests and forwards only the id or attemptId', async () => {
+    const { service, routes } = routeFixture()
+    const start = routes.find(route => route.path.endsWith('/oauth-start'))
+    const status = routes.find(route => route.path.endsWith('/oauth-status'))
+    const cancel = routes.find(route => route.path.endsWith('/oauth-cancel'))
+    const id = '123e4567-e89b-42d3-a456-426614174000'
+
+    await start.fetch(new Request('http://localhost', { method: 'POST', body: '{"id":"notion"}' }))
+    await status.fetch(new Request('http://localhost', { method: 'POST', body: JSON.stringify({ attemptId: id }) }))
+    await cancel.fetch(new Request('http://localhost', { method: 'POST', body: JSON.stringify({ attemptId: id }) }))
+    expect(service.startOAuth).toHaveBeenCalledWith('notion')
+    expect(service.oauthStatus).toHaveBeenCalledWith(id)
+    expect(service.cancelOAuth).toHaveBeenCalledWith(id)
+
+    expect((await status.fetch(new Request('http://localhost', {
+      method: 'POST', body: JSON.stringify({ attemptId: id, code: 'must-not-be-here' }),
+    }))).status).toBe(400)
+    expect((await cancel.fetch(new Request('http://localhost', {
+      method: 'POST', body: '{"attemptId":"invalid"}',
+    }))).status).toBe(400)
+  })
+
   it('validates set-enabled and remove bodies strictly', async () => {
     const { service, routes } = routeFixture()
     const setEnabled = routes.find(route => route.path.endsWith('/set-enabled'))
@@ -73,7 +98,8 @@ function routeFixture() {
   const routes = []
   const service = {
     getCatalog: vi.fn(), refreshCatalog: vi.fn(), listConnectors: vi.fn(),
-    connectApiKey: vi.fn(), remount: vi.fn(), setEnabled: vi.fn(), probe: vi.fn(), remove: vi.fn(),
+    connectApiKey: vi.fn(), startOAuth: vi.fn(), oauthStatus: vi.fn(), cancelOAuth: vi.fn(),
+    remount: vi.fn(), setEnabled: vi.fn(), probe: vi.fn(), remove: vi.fn(),
   }
   // Capture registrations through the same effect/register boundary used in production.
   const context = {

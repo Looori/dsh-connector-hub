@@ -3,7 +3,7 @@ import type { StoredConnector } from '../shared/config'
 import type { ConnectorProbeResult } from '../shared/status'
 import { CredentialGateway } from './gateway'
 import { safeErrorMessage } from './redact'
-import { MemorySecretStore } from './secrets'
+import { MemorySecretStore, type OAuthSecret } from './secrets'
 
 export const DEFAULT_PROBE_TIMEOUT_MS = 10_000
 
@@ -69,14 +69,33 @@ export async function probeConnector(
 }
 
 /** Probe a candidate Key on an isolated gateway so live mounts keep using the previous credential. */
-export async function probeApiKeyConnector(
+export function probeApiKeyConnector(
   id: string,
   connector: StoredConnector,
   key: string,
   options: ProbeOptions = {},
 ): Promise<ConnectorProbeResult> {
+  return probeCandidateCredential(id, connector, { v: 1, apiKey: key }, options)
+}
+
+/** Probe newly authorized OAuth tokens without replacing a live connection's credentials. */
+export function probeOAuthConnector(
+  id: string,
+  connector: StoredConnector,
+  secret: OAuthSecret,
+  options: ProbeOptions = {},
+): Promise<ConnectorProbeResult> {
+  return probeCandidateCredential(id, connector, secret, options)
+}
+
+async function probeCandidateCredential(
+  id: string,
+  connector: StoredConnector,
+  secret: Parameters<MemorySecretStore['write']>[1],
+  options: ProbeOptions,
+): Promise<ConnectorProbeResult> {
   const secrets = new MemorySecretStore()
-  await secrets.write(id, { v: 1, apiKey: key })
+  await secrets.write(id, secret)
   const gateway = await CredentialGateway.start({
     getConnector: requested => requested === id ? connector : undefined,
     secrets,

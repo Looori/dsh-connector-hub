@@ -1,4 +1,5 @@
 import type { Context } from '@deepseek-ai/cordis'
+import { OAuthFlowError } from './oauth'
 import { safeErrorMessage } from './redact'
 import { ConnectorHubError, type ConnectorHubService } from './service'
 
@@ -27,6 +28,18 @@ export function registerHostRoutes(ctx: Context, service: ConnectorHubService): 
         throw new ConnectorHubError('Expected a non-empty string API Key')
       }
       return service.connectApiKey(stringId(body.id), body.key)
+    }),
+    route('/api/connector-hub/oauth-start', 'POST', async request => {
+      const body = await jsonBody(request, ['id'])
+      return service.startOAuth(stringId(body.id))
+    }),
+    route('/api/connector-hub/oauth-status', 'POST', async request => {
+      const body = await jsonBody(request, ['attemptId'])
+      return service.oauthStatus(attemptId(body.attemptId))
+    }),
+    route('/api/connector-hub/oauth-cancel', 'POST', async request => {
+      const body = await jsonBody(request, ['attemptId'])
+      return service.cancelOAuth(attemptId(body.attemptId))
     }),
     route('/api/connector-hub/remount', 'POST', async request => {
       const body = await jsonBody(request, ['id'])
@@ -67,7 +80,7 @@ async function answer(handler: (request: Request) => Promise<Response>, request:
   try {
     return await handler(request)
   } catch (error) {
-    const status = error instanceof ConnectorHubError ? error.status : 500
+    const status = error instanceof ConnectorHubError || error instanceof OAuthFlowError ? error.status : 500
     return Response.json({ ok: false, error: safeErrorMessage(error) }, { status })
   }
 }
@@ -89,6 +102,13 @@ async function jsonBody(request: Request, allowedKeys: string[]): Promise<Record
 function stringId(value: unknown): string {
   if (typeof value !== 'string' || !/^[a-z0-9-]{1,24}$/.test(value)) {
     throw new ConnectorHubError('id must be a valid connector id')
+  }
+  return value
+}
+
+function attemptId(value: unknown): string {
+  if (typeof value !== 'string' || !/^[a-f0-9-]{36}$/.test(value)) {
+    throw new ConnectorHubError('attemptId must be a valid OAuth attempt id')
   }
   return value
 }

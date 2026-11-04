@@ -2,10 +2,11 @@ import type { Catalog } from '../shared/catalog'
 import type { ConnectorConfig, StoredConnector } from '../shared/config'
 import type { ConnectorProbeResult } from '../shared/status'
 import { CatalogService, type CatalogResult } from './catalog'
-import { probeApiKeyConnector, probeConnector } from './health'
+import { probeApiKeyConnector, probeConnector, probeOAuthConnector } from './health'
 import { MountManager, type ConnectorMountSnapshot } from './mounts'
+import { OAuthFlowError, OAuthManager, type OAuthAttemptView, type OAuthStartResult } from './oauth'
 import { redactUrl } from './redact'
-import type { SecretStore } from './secrets'
+import type { ConnectorSecret, OAuthSecret, SecretStore } from './secrets'
 import type { ConnectorStore } from './store'
 
 export class ConnectorHubError extends Error {
@@ -33,18 +34,22 @@ export interface ConnectorHubServiceOptions {
   secrets: SecretStore
   mounts: MountManager
   gateway: GatewayEndpoints
+  oauth?: OAuthManager
   probeCandidate?: (id: string, connector: StoredConnector, key: string) => Promise<ConnectorProbeResult>
+  probeOAuthCandidate?: (id: string, connector: StoredConnector, secret: OAuthSecret) => Promise<ConnectorProbeResult>
   probeMounted?: (id: string) => Promise<ConnectorProbeResult>
   now?: () => Date
 }
 
-/** Transactional API Key lifecycle shared by all Host routes. */
+/** Transactional connector lifecycle shared by all Host routes. */
 export class ConnectorHubService {
   private readonly catalog: CatalogService
   private readonly store: ConnectorStore
   private readonly secrets: SecretStore
   private readonly mounts: MountManager
+  private readonly oauth?: OAuthManager
   private readonly probeCandidate: NonNullable<ConnectorHubServiceOptions['probeCandidate']>
+  private readonly probeOAuthCandidate: NonNullable<ConnectorHubServiceOptions['probeOAuthCandidate']>
   private readonly probeMounted: NonNullable<ConnectorHubServiceOptions['probeMounted']>
   private readonly now: () => Date
   private readonly probes = new Map<string, ConnectorProbeResult>()
@@ -55,7 +60,9 @@ export class ConnectorHubService {
     this.store = options.store
     this.secrets = options.secrets
     this.mounts = options.mounts
+    this.oauth = options.oauth
     this.probeCandidate = options.probeCandidate ?? probeApiKeyConnector
+    this.probeOAuthCandidate = options.probeOAuthCandidate ?? probeOAuthConnector
     this.probeMounted = options.probeMounted ?? (id => probeConnector(id, options.gateway.endpoint(id)))
     this.now = options.now ?? (() => new Date())
   }
@@ -105,26 +112,82 @@ export class ConnectorHubService {
       }
       const probe = await this.probeCandidate(id, candidate, key)
       if (!probe.ok) throw new ConnectorHubError(probe.error ?? 'API Key probe failed')
-
-      const previousSecret = existing ? await this.secrets.read(id) : null
-      try {
-        await this.secrets.write(id, { v: 1, apiKey: key })
-        const next = await this.store.update(draft => { draft.connectors[id] = candidate })
-        const mount = candidate.enabled
-          ? await this.mounts.remount(id, candidate)
-          : await this.unmounted(id)
-        if (mount.status === 'failed') throw new ConnectorHubError(mount.error ?? 'MCP client mount failed', 502)
-        this.probes.set(id, probe)
-        return this.view(id, next.connectors[id])
-      } catch (error) {
-        await this.store.write(config).catch(() => {})
-        if (previousSecret) await this.secrets.write(id, previousSecret).catch(() => {})
-        else await this.secrets.delete(id).catch(() => {})
-        if (existing?.enabled) await this.mounts.remount(id, existing).catch(() => {})
-        else await this.mounts.unmount(id).catch(() => {})
-        throw error
-      }
+      return this.commitCandidate(config, id, candidate, { v: 1, apiKey: key }, probe)
     })
+  }
+
+  startOAuth(id: string): Promise<OAuthStartResult> {
+    return this.serialize(async () => {
+      if (!this.oauth) throw new ConnectorHubError('OAuth support is unavailable', 500)
+      const config = await this.sync()
+      const catalogResult = await this.catalog.load()
+      const item = catalogResult.catalog.connectors.find(connector => connector.id === id)
+      if (!item) throw new ConnectorHubError('Unknown connector id', 404)
+      const existing = config.connectors[id]
+      const source = existing ?? item
+      if (source.auth.type !== 'oauth') throw new ConnectorHubError('Connector does not use OAuth authentication')
+      const candidate: StoredConnector = {
+        catalogRevision: existing?.catalogRevision ?? catalogResult.catalog.revision,
+        remote: structuredClone(source.remote),
+        auth: structuredClone(source.auth),
+        enabled: existing?.enabled ?? true,
+        addedAt: existing?.addedAt ?? this.now().toISOString(),
+      }
+      return this.oauth.start(id, candidate, secret => this.completeOAuth(id, candidate, secret))
+    })
+  }
+
+  oauthStatus(attemptId: string): OAuthAttemptView {
+    if (!this.oauth) throw new ConnectorHubError('OAuth support is unavailable', 500)
+    return this.oauth.status(attemptId)
+  }
+
+  cancelOAuth(attemptId: string): Promise<{ cancelled: true }> {
+    if (!this.oauth) throw new ConnectorHubError('OAuth support is unavailable', 500)
+    return this.oauth.cancel(attemptId)
+  }
+
+  private completeOAuth(id: string, candidate: StoredConnector, secret: OAuthSecret): Promise<void> {
+    return this.serialize(async () => {
+      const config = await this.sync()
+      const existing = config.connectors[id]
+      const nextCandidate: StoredConnector = {
+        ...structuredClone(candidate),
+        enabled: existing?.enabled ?? candidate.enabled,
+        addedAt: existing?.addedAt ?? candidate.addedAt,
+      }
+      const probe = await this.probeOAuthCandidate(id, nextCandidate, secret)
+      if (!probe.ok) throw new ConnectorHubError(probe.error ?? 'OAuth probe failed')
+      await this.commitCandidate(config, id, nextCandidate, secret, probe)
+    })
+  }
+
+  private async commitCandidate(
+    config: ConnectorConfig,
+    id: string,
+    candidate: StoredConnector,
+    secret: ConnectorSecret,
+    probe: ConnectorProbeResult,
+  ): Promise<ConnectorView> {
+    const existing = config.connectors[id]
+    const previousSecret = existing ? await this.secrets.read(id) : null
+    try {
+      await this.secrets.write(id, secret)
+      const next = await this.store.update(draft => { draft.connectors[id] = candidate })
+      const mount = candidate.enabled
+        ? await this.mounts.remount(id, candidate)
+        : await this.unmounted(id)
+      if (mount.status === 'failed') throw new ConnectorHubError(mount.error ?? 'MCP client mount failed', 502)
+      this.probes.set(id, probe)
+      return this.view(id, next.connectors[id])
+    } catch (error) {
+      await this.store.write(config).catch(() => {})
+      if (previousSecret) await this.secrets.write(id, previousSecret).catch(() => {})
+      else await this.secrets.delete(id).catch(() => {})
+      if (existing?.enabled) await this.mounts.remount(id, existing).catch(() => {})
+      else await this.mounts.unmount(id).catch(() => {})
+      throw error
+    }
   }
 
   probe(id: string): Promise<ConnectorView> {
@@ -165,6 +228,7 @@ export class ConnectorHubService {
     return this.serialize(async () => {
       const config = await this.sync()
       if (!config.connectors[id]) throw new ConnectorHubError('Connector is not added', 404)
+      await this.oauth?.cancelConnector(id)
       await this.mounts.unmount(id)
       await this.secrets.delete(id)
       await this.store.update(draft => { delete draft.connectors[id] })

@@ -3,6 +3,7 @@ import { resolveDshHome } from '@deepseek-ai/dsh-home-paths'
 import { CatalogService } from './catalog'
 import { CredentialGateway } from './gateway'
 import { MountManager } from './mounts'
+import { OAuthManager } from './oauth'
 import { registerHostRoutes } from './routes'
 import { KeychainSecretStore } from './secrets'
 import { ConnectorHubService } from './service'
@@ -27,10 +28,12 @@ export async function apply(ctx: Context, config: ConnectorHubConfig = {}): Prom
   try {
     const catalog = new CatalogService({ dshHome, catalogUrl: config.catalogUrl })
     const mounts = new MountManager({ context: ctx, gateway })
-    const service = new ConnectorHubService({ catalog, store, secrets, mounts, gateway })
+    const oauth = new OAuthManager()
+    const service = new ConnectorHubService({ catalog, store, secrets, mounts, gateway, oauth })
     await service.start()
 
     ctx.effect(() => async () => {
+      await oauth.close()
       await mounts.dispose()
       await gateway.close()
     }, 'connector-hub: runtime')
