@@ -3,6 +3,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import type { StoredConnector } from '../shared/config'
+import { OAuthReauthorizationError, type OAuthTokenRefresher } from './oauth-refresh'
 import type { ApiKeySecret, OAuthSecret, SecretStore } from './secrets'
 import { safeErrorMessage } from './redact'
 
@@ -28,6 +29,7 @@ export interface CredentialGatewayOptions {
   hubKey?: string
   /** Defaults to global fetch so DSH's installed dispatcher remains effective. */
   fetchImpl?: typeof globalThis.fetch
+  oauthRefresher?: OAuthTokenRefresher
 }
 
 export class CredentialGateway {
@@ -35,6 +37,7 @@ export class CredentialGateway {
   private readonly getConnector: CredentialGatewayOptions['getConnector']
   private readonly secrets: SecretStore
   private readonly fetchImpl: typeof globalThis.fetch
+  private readonly oauthRefresher?: OAuthTokenRefresher
   private readonly server: Server
   private gatewayOrigin: string | undefined
 
@@ -42,6 +45,7 @@ export class CredentialGateway {
     this.getConnector = options.getConnector
     this.secrets = options.secrets
     this.fetchImpl = options.fetchImpl ?? globalThis.fetch
+    this.oauthRefresher = options.oauthRefresher
     this.hubKey = options.hubKey ?? randomBytes(32).toString('base64url')
     this.server = createServer((request, response) => {
       void this.handle(request, response)
@@ -101,15 +105,26 @@ export class CredentialGateway {
 
       const upstream = new URL(connector.remote.url)
       const headers = forwardedHeaders(request)
-      await this.injectCredential(route.id, connector, upstream, headers)
       const body = method === 'GET' ? undefined : await readBody(request)
+      const credential = await this.injectCredential(route.id, connector, upstream, headers)
 
-      const upstreamResponse = await this.fetchImpl(upstream, {
+      let upstreamResponse = await this.fetchImpl(upstream, {
         method,
         headers,
         body,
         signal: abort.signal,
       })
+      if (upstreamResponse.status === 401 && credential && this.oauthRefresher) {
+        await upstreamResponse.body?.cancel().catch(() => {})
+        const refreshed = await this.oauthRefresher.afterUnauthorized(route.id, connector, credential)
+        headers.set('authorization', `Bearer ${refreshed.tokens.access_token}`)
+        upstreamResponse = await this.fetchImpl(upstream, {
+          method,
+          headers,
+          body,
+          signal: abort.signal,
+        })
+      }
       writeUpstreamHeaders(response, upstreamResponse.headers)
       response.writeHead(upstreamResponse.status)
       if (upstreamResponse.body === null) response.end()
@@ -121,8 +136,9 @@ export class CredentialGateway {
         response.destroy()
         return
       }
-      if (error instanceof GatewayHttpError) {
-        respondJson(response, error.status, { ok: false, error: error.message })
+      if (error instanceof GatewayHttpError || error instanceof OAuthReauthorizationError) {
+        const status = error instanceof GatewayHttpError ? error.status : 401
+        respondJson(response, status, { ok: false, error: error.message })
         return
       }
       const status = abort.signal.aborted ? 499 : 502
@@ -145,20 +161,24 @@ export class CredentialGateway {
     connector: StoredConnector,
     upstream: URL,
     headers: Headers,
-  ): Promise<void> {
+  ): Promise<OAuthSecret | undefined> {
     const auth = connector.auth
-    if (auth.type === 'none') return
+    if (auth.type === 'none') return undefined
     const secret = await this.secrets.read(id)
     if (secret === null) throw new GatewayHttpError(401, 'Connector credential is missing')
 
     if (auth.type === 'oauth') {
       if (!isOAuthSecret(secret)) throw new GatewayHttpError(401, 'OAuth credential is invalid')
-      headers.set('authorization', `Bearer ${secret.tokens.access_token}`)
-      return
+      const credential = this.oauthRefresher
+        ? await this.oauthRefresher.validSecret(id, connector)
+        : secret
+      headers.set('authorization', `Bearer ${credential.tokens.access_token}`)
+      return credential
     }
     if (!isApiKeySecret(secret)) throw new GatewayHttpError(401, 'API Key credential is invalid')
     if (auth.in === 'header') headers.set(auth.name, secret.apiKey)
     else upstream.searchParams.set(auth.name, secret.apiKey)
+    return undefined
   }
 }
 

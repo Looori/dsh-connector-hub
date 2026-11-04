@@ -4,7 +4,9 @@ import type { ConnectorProbeResult } from '../shared/status'
 import { CatalogService, type CatalogResult } from './catalog'
 import { probeApiKeyConnector, probeConnector, probeOAuthConnector } from './health'
 import { MountManager, type ConnectorMountSnapshot } from './mounts'
-import { OAuthFlowError, OAuthManager, type OAuthAttemptView, type OAuthStartResult } from './oauth'
+import { maskAccountName } from './oauth-account'
+import type { OAuthTokenRefresher } from './oauth-refresh'
+import { OAuthManager, type OAuthAttemptView, type OAuthStartResult } from './oauth'
 import { redactUrl } from './redact'
 import type { ConnectorSecret, OAuthSecret, SecretStore } from './secrets'
 import type { ConnectorStore } from './store'
@@ -22,6 +24,7 @@ export interface ConnectorView extends ConnectorMountSnapshot {
   remote: StoredConnector['remote']
   auth: StoredConnector['auth']
   lastProbe: ConnectorProbeResult | null
+  account?: string | null
 }
 
 interface GatewayEndpoints {
@@ -35,6 +38,8 @@ export interface ConnectorHubServiceOptions {
   mounts: MountManager
   gateway: GatewayEndpoints
   oauth?: OAuthManager
+  oauthTokens?: OAuthTokenRefresher
+  reauthRequired?: Set<string>
   probeCandidate?: (id: string, connector: StoredConnector, key: string) => Promise<ConnectorProbeResult>
   probeOAuthCandidate?: (id: string, connector: StoredConnector, secret: OAuthSecret) => Promise<ConnectorProbeResult>
   probeMounted?: (id: string) => Promise<ConnectorProbeResult>
@@ -48,6 +53,8 @@ export class ConnectorHubService {
   private readonly secrets: SecretStore
   private readonly mounts: MountManager
   private readonly oauth?: OAuthManager
+  private readonly oauthTokens?: OAuthTokenRefresher
+  private readonly reauthRequired: Set<string>
   private readonly probeCandidate: NonNullable<ConnectorHubServiceOptions['probeCandidate']>
   private readonly probeOAuthCandidate: NonNullable<ConnectorHubServiceOptions['probeOAuthCandidate']>
   private readonly probeMounted: NonNullable<ConnectorHubServiceOptions['probeMounted']>
@@ -61,6 +68,8 @@ export class ConnectorHubService {
     this.secrets = options.secrets
     this.mounts = options.mounts
     this.oauth = options.oauth
+    this.oauthTokens = options.oauthTokens
+    this.reauthRequired = options.reauthRequired ?? new Set()
     this.probeCandidate = options.probeCandidate ?? probeApiKeyConnector
     this.probeOAuthCandidate = options.probeOAuthCandidate ?? probeOAuthConnector
     this.probeMounted = options.probeMounted ?? (id => probeConnector(id, options.gateway.endpoint(id)))
@@ -178,6 +187,7 @@ export class ConnectorHubService {
         ? await this.mounts.remount(id, candidate)
         : await this.unmounted(id)
       if (mount.status === 'failed') throw new ConnectorHubError(mount.error ?? 'MCP client mount failed', 502)
+      this.reauthRequired.delete(id)
       this.probes.set(id, probe)
       return this.view(id, next.connectors[id])
     } catch (error) {
@@ -206,6 +216,7 @@ export class ConnectorHubService {
       const connector = config.connectors[id]
       if (!connector) throw new ConnectorHubError('Connector is not added', 404)
       if (!connector.enabled) throw new ConnectorHubError('Enable the connector before remounting', 409)
+      if (this.reauthRequired.has(id)) throw new ConnectorHubError('Reauthorization is required before remounting', 409)
       await this.mounts.remount(id, connector)
       return this.view(id, connector)
     })
@@ -216,6 +227,7 @@ export class ConnectorHubService {
       await this.sync()
       const current = await this.store.read()
       if (!current.connectors[id]) throw new ConnectorHubError('Connector is not added', 404)
+      if (enabled && this.reauthRequired.has(id)) throw new ConnectorHubError('Reauthorization is required before enabling', 409)
       const next = await this.store.update(draft => { draft.connectors[id].enabled = enabled })
       const connector = next.connectors[id]
       if (enabled) await this.mounts.remount(id, connector)
@@ -227,12 +239,18 @@ export class ConnectorHubService {
   remove(id: string): Promise<{ removed: true }> {
     return this.serialize(async () => {
       const config = await this.sync()
-      if (!config.connectors[id]) throw new ConnectorHubError('Connector is not added', 404)
+      const connector = config.connectors[id]
+      if (!connector) throw new ConnectorHubError('Connector is not added', 404)
+      const secret = await this.secrets.read(id).catch(() => null)
       await this.oauth?.cancelConnector(id)
       await this.mounts.unmount(id)
       await this.secrets.delete(id)
       await this.store.update(draft => { delete draft.connectors[id] })
+      this.reauthRequired.delete(id)
       this.probes.delete(id)
+      if (connector.auth.type === 'oauth' && secret && 'tokens' in secret) {
+        await this.oauthTokens?.revoke(id, connector, secret).catch(() => {})
+      }
       return { removed: true }
     })
   }
@@ -243,13 +261,23 @@ export class ConnectorHubService {
     return config
   }
 
-  private views(config: ConnectorConfig): ConnectorView[] {
-    return Object.keys(config.connectors).map(id => this.view(id, config.connectors[id]))
+  private views(config: ConnectorConfig): Promise<ConnectorView[]> {
+    return Promise.all(Object.keys(config.connectors).map(id => this.view(id, config.connectors[id])))
   }
 
-  private view(id: string, connector: StoredConnector): ConnectorView {
+  private async view(id: string, connector: StoredConnector): Promise<ConnectorView> {
     const probe = this.probes.get(id) ?? null
-    const mount = this.mounts.list({ [id]: connector }, probe ? { [id]: probe } : {})[0]
+    const mount = this.mounts.list(
+      { [id]: connector },
+      probe ? { [id]: probe } : {},
+      this.reauthRequired,
+    )[0]
+    let account: string | null = null
+    if (connector.auth.type === 'oauth') {
+      const secret = await this.secrets.read(id).catch(() => null)
+      const name = secret && 'tokens' in secret ? secret.account?.name : undefined
+      if (typeof name === 'string') account = maskAccountName(name)
+    }
     return {
       ...mount,
       catalogRevision: connector.catalogRevision,
@@ -257,6 +285,7 @@ export class ConnectorHubService {
       remote: { ...connector.remote, url: redactUrl(connector.remote.url) },
       auth: structuredClone(connector.auth),
       lastProbe: probe,
+      account,
     }
   }
 

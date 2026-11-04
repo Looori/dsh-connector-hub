@@ -4,6 +4,7 @@ import { CatalogService } from './catalog'
 import { CredentialGateway } from './gateway'
 import { MountManager } from './mounts'
 import { OAuthManager } from './oauth'
+import { OAuthTokenRefresher } from './oauth-refresh'
 import { registerHostRoutes } from './routes'
 import { KeychainSecretStore } from './secrets'
 import { ConnectorHubService } from './service'
@@ -21,20 +22,33 @@ export async function apply(ctx: Context, config: ConnectorHubConfig = {}): Prom
   const store = new ConnectorStore(dshHome)
   await store.read()
   const secrets = new KeychainSecretStore()
+  const reauthRequired = new Set<string>()
+  let mounts: MountManager | undefined
+  const oauthTokens = new OAuthTokenRefresher({
+    secrets,
+    dshHome,
+    onReauthRequired: id => {
+      reauthRequired.add(id)
+      void mounts?.unmount(id).catch(() => {})
+    },
+  })
   const gateway = await CredentialGateway.start({
     getConnector: id => store.snapshot()?.connectors[id],
     secrets,
+    oauthRefresher: oauthTokens,
   })
   try {
     const catalog = new CatalogService({ dshHome, catalogUrl: config.catalogUrl })
-    const mounts = new MountManager({ context: ctx, gateway })
+    mounts = new MountManager({ context: ctx, gateway })
     const oauth = new OAuthManager()
-    const service = new ConnectorHubService({ catalog, store, secrets, mounts, gateway, oauth })
+    const service = new ConnectorHubService({
+      catalog, store, secrets, mounts, gateway, oauth, oauthTokens, reauthRequired,
+    })
     await service.start()
 
     ctx.effect(() => async () => {
       await oauth.close()
-      await mounts.dispose()
+      await mounts?.dispose()
       await gateway.close()
     }, 'connector-hub: runtime')
     ctx.inject(['connection'], scope => registerHostRoutes(scope, service))

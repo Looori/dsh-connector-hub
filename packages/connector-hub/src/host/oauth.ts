@@ -10,6 +10,7 @@ import {
   type StoredOAuthTokens,
 } from '@modelcontextprotocol/client'
 import type { StoredConnector } from '../shared/config'
+import { extractOAuthAccount, type OAuthAccount } from './oauth-account'
 import { safeErrorMessage } from './redact'
 import type { OAuthSecret } from './secrets'
 
@@ -199,7 +200,7 @@ export class OAuthManager {
         fetchFn: (input, init) => this.fetchForAttempt(attempt, input, init),
       })
       if (result !== 'AUTHORIZED' || !attempt.provider.savedTokens) throw new Error('OAuth token exchange failed')
-      const secret = this.toSecret(attempt.provider.savedTokens)
+      const secret = this.toSecret(attempt.provider.savedTokens, attempt.provider.account)
       await attempt.onAuthorized(secret)
       attempt.status = 'success'
       respondText(response, 200, '已连接，可以关闭此页')
@@ -225,7 +226,7 @@ export class OAuthManager {
     await closeServer(attempt.server)
   }
 
-  private fetchForAttempt(
+  private async fetchForAttempt(
     attempt: OAuthAttempt,
     input: RequestInfo | URL,
     init?: RequestInit,
@@ -236,10 +237,19 @@ export class OAuthManager {
       throw new OAuthFlowError('Dynamic OAuth client registration is forbidden')
     }
     const signal = init?.signal ? AbortSignal.any([init.signal, attempt.abort.signal]) : attempt.abort.signal
-    return this.fetchImpl(input, { ...init, signal })
+    const response = await this.fetchImpl(input, { ...init, signal })
+    if (response.ok && method.toUpperCase() === 'POST' && /\/token$/.test(url.pathname)) {
+      try {
+        const account = extractOAuthAccount(await response.clone().json())
+        if (account) attempt.provider.account = account
+      } catch {
+        // Account display is optional; token exchange still uses the original response.
+      }
+    }
+    return response
   }
 
-  private toSecret(tokens: StoredOAuthTokens): OAuthSecret {
+  private toSecret(tokens: StoredOAuthTokens, account?: OAuthAccount): OAuthSecret {
     return {
       v: 1,
       tokens: {
@@ -250,6 +260,7 @@ export class OAuthManager {
           : this.now().getTime() + tokens.expires_in * 1000,
         ...(tokens.scope === undefined ? {} : { scope: tokens.scope }),
       },
+      ...(account === undefined ? {} : { account: structuredClone(account) }),
     }
   }
 }
@@ -268,6 +279,7 @@ class SharedClientProvider implements OAuthClientProvider {
   readonly stateValue = randomBytes(32).toString('base64url')
   authorizationUrl?: string
   savedTokens?: StoredOAuthTokens
+  account?: OAuthAccount
   private savedClient?: StoredOAuthClientInformation
   private verifier?: string
   private discovery?: OAuthDiscoveryState

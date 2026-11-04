@@ -7,6 +7,8 @@ export interface OAuthFixtureServer {
   registrationRequests: number
   revocationRequests: number
   issueRefreshToken: boolean
+  rejectRefresh: boolean
+  revocationStatus: number
   close(): Promise<void>
 }
 
@@ -25,6 +27,8 @@ export async function startOAuthFixtureServer(): Promise<OAuthFixtureServer> {
     get registrationRequests() { return registrationRequests },
     get revocationRequests() { return revocationRequests },
     issueRefreshToken: true,
+    rejectRefresh: false,
+    revocationStatus: 200,
     close: () => closeServer(server),
   }
 
@@ -61,13 +65,18 @@ export async function startOAuthFixtureServer(): Promise<OAuthFixtureServer> {
     }
     if (request.method === 'POST' && url.pathname === '/revoke') {
       revocationRequests += 1
-      response.writeHead(200).end()
+      response.writeHead(fixture.revocationStatus).end()
       return
     }
     if (request.method === 'POST' && url.pathname === '/token') {
       const body = await readForm(request)
-      if (body.get('grant_type') === 'refresh_token') refreshRequests.push(body)
-      else tokenRequests.push(body)
+      if (body.get('grant_type') === 'refresh_token') {
+        refreshRequests.push(body)
+        if (fixture.rejectRefresh) {
+          respondJson(response, 400, { error: 'invalid_grant', error_description: 'refresh token expired' })
+          return
+        }
+      } else tokenRequests.push(body)
       tokenSequence += 1
       respondJson(response, 200, {
         access_token: `access-${tokenSequence}`,
