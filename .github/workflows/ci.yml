@@ -27,7 +27,7 @@ jobs:
       - run: pnpm exec playwright install chromium
       - name: Install DSH matrix version
         run: |
-          npm install --prefix "$RUNNER_TEMP/dsh-matrix" "@deepseek-ai/dsh@${{ matrix.dsh }}" --registry=https://registry.npmmirror.com
+          npm install --prefix "$RUNNER_TEMP/dsh-matrix" "@deepseek-ai/dsh@${{ matrix.dsh }}" --registry=https://registry.npmjs.org
           echo "DSH_BIN=$RUNNER_TEMP/dsh-matrix/node_modules/@deepseek-ai/dsh/lib/bin.js" >> "$GITHUB_ENV"
       - run: pnpm test
       - run: pnpm typecheck
