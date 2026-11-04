@@ -9,7 +9,7 @@ import { run, startDshWeb, waitFor, type DshWebProcess } from './dsh-process'
 
 const root = fileURLToPath(new URL('../..', import.meta.url))
 const packageDir = resolve(root, 'packages/connector-hub')
-const dshBin = resolve(packageDir, 'node_modules/@deepseek-ai/dsh/lib/bin.js')
+const dshBin = process.env.DSH_BIN ?? resolve(packageDir, 'node_modules/@deepseek-ai/dsh/lib/bin.js')
 const keyringRegister = resolve(root, 'test/e2e/keyring-register.mjs')
 const chromePath = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
 const toolName = 'mcp__notion__echo'
@@ -124,7 +124,7 @@ it('runs OAuth authorization, refresh, reauthorization and revocation through re
     await page.getByRole('button', { name: 'Authorize', exact: true }).click()
     await page.getByText('OAuth authorization succeeded. Its tools are now available in every session.', { exact: true }).waitFor()
     await page.getByRole('dialog').waitFor({ state: 'hidden' })
-    await page.getByRole('tab', { name: 'Mine', exact: true }).click()
+    await page.getByRole('tab', { name: 'Yours', exact: true }).click()
     const row = page.getByTestId('mine-row-notion')
     await row.waitFor()
     await row.getByText('Connected', { exact: true }).waitFor()

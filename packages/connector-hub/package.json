@@ -1,7 +1,23 @@
 {
   "name": "dsh-connector-hub",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Community connector hub for DeepSeek Harness; not an official DeepSeek product.",
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "mcp",
+    "connectors",
+    "plugin"
+  ],
+  "homepage": "https://github.com/Looori/dsh-connector-hub#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Looori/dsh-connector-hub.git",
+    "directory": "packages/connector-hub"
+  },
+  "bugs": {
+    "url": "https://github.com/Looori/dsh-connector-hub/issues"
+  },
   "type": "module",
   "main": "./lib/index.js",
   "exports": {

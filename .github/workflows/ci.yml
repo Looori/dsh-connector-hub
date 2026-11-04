@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        dsh: ['0.2.1-rc.5', 'next']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmmirror.com
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile --registry=https://registry.npmmirror.com
+      - run: pnpm exec playwright install chromium
+      - name: Install DSH matrix version
+        run: |
+          npm install --prefix "$RUNNER_TEMP/dsh-matrix" "@deepseek-ai/dsh@${{ matrix.dsh }}" --registry=https://registry.npmmirror.com
+          echo "DSH_BIN=$RUNNER_TEMP/dsh-matrix/node_modules/@deepseek-ai/dsh/lib/bin.js" >> "$GITHUB_ENV"
+      - run: pnpm test
+      - run: pnpm typecheck
+      - run: pnpm build

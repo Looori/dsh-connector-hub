@@ -620,7 +620,8 @@ function OAuthModal({
     >
       <div style={styles.form}>
         {phase === 'idle' && <p style={styles.muted}>{t('oauthIntro')}</p>}
-        {(phase === 'starting' || phase === 'cancelling') && <p style={styles.muted}>{t('startingOauth')}</p>}
+        {phase === 'starting' && <p style={styles.muted}>{t('startingOauth')}</p>}
+        {phase === 'cancelling' && <p style={styles.muted}>{t('cancellingOauth')}</p>}
         {phase === 'waiting' && (
           <>
             <p style={styles.muted}>{t('waitingOauth')}</p>

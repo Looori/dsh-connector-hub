@@ -9,7 +9,7 @@ import { CONNECTOR_ID, TEST_API_KEY, startFixtureServer } from './fixture-server
 
 const root = fileURLToPath(new URL('../..', import.meta.url))
 const packageDir = resolve(root, 'packages/connector-hub')
-const dshBin = resolve(packageDir, 'node_modules/@deepseek-ai/dsh/lib/bin.js')
+const dshBin = process.env.DSH_BIN ?? resolve(packageDir, 'node_modules/@deepseek-ai/dsh/lib/bin.js')
 const keyringRegister = resolve(root, 'test/e2e/keyring-register.mjs')
 const chromePath = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
 const toolName = `mcp__${CONNECTOR_ID}__echo`
@@ -164,7 +164,7 @@ it('runs the API Key lifecycle through real DSH routes and the browser UI', { ti
     await page.getByRole('button', { name: 'Save and connect', exact: true }).click()
     expect((await addResponse).status()).toBe(200)
     await page.getByRole('dialog').waitFor({ state: 'hidden' })
-    await page.getByRole('tab', { name: 'Mine', exact: true }).click()
+    await page.getByRole('tab', { name: 'Yours', exact: true }).click()
     const row = page.getByTestId(`mine-row-${CONNECTOR_ID}`)
     await row.waitFor()
     await row.getByText('Connected', { exact: true }).waitFor()
