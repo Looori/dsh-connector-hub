@@ -4,8 +4,8 @@
 
 ## 当前状态
 
-- 当前阶段：**M4 已发布，等待 Desktop 从 npm 安装验收**（2026-11-04）
-- 下一步：在 Desktop 从 npm 安装 `dsh-connector-hub@0.1.0`，按 `docs/design.md` §12 完成真实连接器、双进程与凭据清理验收。
+- 当前阶段：**一期 M4 发布已完成**（2026-11-04）
+- 下一步：一期验收已完成；后续新想法先记入「待讨论」。
 - 阻塞项：无。
 
 ## 里程碑
@@ -18,7 +18,7 @@
 | M1 骨架 | 已完成 | 2026-11-03 | 52 项单测通过，Pages 公开目录与本地快照一致，包含 4 个条目 |
 | M2 API Key | 已完成 | 2026-11-04 | 三个连接器的真实调用与完整生命周期验收通过；15 个测试文件、103 项测试通过 |
 | M3 OAuth | 已完成 | 2026-11-04 | Notion、Xmind 的真实授权、模型调用、自动刷新、双进程及完整生命周期验收通过；19 个测试文件、126 项测试通过 |
-| M4 发布 | 进行中 | | `dsh-connector-hub@0.1.0` 从 npm 安装验证通过 |
+| M4 发布 | 已完成 | 2026-11-04 | `dsh-connector-hub@0.1.0` 从 npm 安装验证通过 |
 
 ## M0 验证任务
 
@@ -67,7 +67,7 @@
 - [x] ② 本地发布包验收：`npm pack` 仅包含 README、两份构建产物、目录快照、patch 和包元数据共 6 个文件，不包含开发调试脚本。tarball 在隔离目录的普通 npm 安装和 DSH `web` profile 安装均成功；安装后版本为 `0.1.0`、内置目录为 5 个连接器，DSH 启动和已认证 `connectors` Host 路由冒烟通过。全程使用临时 `DSH_HOME` 和进程内伪钥匙串，未访问真实凭据。
 - [x] ③ 对外发布：代码已推送到公开仓库 `Looori/dsh-connector-hub`，`dsh-connector-hub@0.1.0` 已发布到官方 npm。Release #2（运行 `41826854259`，提交 `77ccafe`）成功；CI（运行 `41822912457`）的 `0.2.1-rc.5`／`next` 矩阵全部通过。DSH 矩阵安装改用官方 npm（`cb6f119`），发布工作流改用实际的 `NPM_PUBLISH_TOKEN` Secret（`77ccafe`）。
 - [x] ④ npm 安装验收：在全新临时目录从官方 npm 安装 `dsh-connector-hub@0.1.0` 成功，npm 返回的 shasum 与本地 tarball 一致；随后用隔离 `DSH_HOME` 的 `web` profile 完成 DSH 插件安装、启动和已认证 `connectors` Host 路由冒烟。使用进程内伪钥匙串，未访问真实凭据。
-- [ ] ⑤ Desktop 验收：从 npm 安装后，按 `docs/design.md` §12 检查五个连接器的真实模型调用、停用／启用、Xmind 自动刷新、Desktop／web 双进程及删除后的钥匙串清理。
+- [x] ⑤ Desktop 验收：从 npm 安装并启用 `dsh-connector-hub@0.1.0` 后，连接器 tab 和包含 5 个条目的发现页正常；五个连接器的真实模型工具调用及停用／启用均通过；Notion、Xmind 在本地 token 过期后试连正常，自动刷新和 Desktop／web 双进程验证通过；删除连接器后 Keychain 中对应条目消失。
 
 ## 已完成的事项
 
