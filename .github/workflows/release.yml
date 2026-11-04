@@ -31,4 +31,4 @@ jobs:
       - name: Publish to npm
         run: npm publish ./packages/connector-hub --access public --provenance --registry=https://registry.npmjs.org
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_PUBLISH_TOKEN }}
