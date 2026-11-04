@@ -82,6 +82,13 @@ function view(overrides: Partial<ConnectorView> = {}): ConnectorView {
   }
 }
 
+function oauthView(overrides: Partial<ConnectorView> = {}): ConnectorView {
+  return view({
+    id: 'notion', remote: notion.remote, auth: notion.auth,
+    tools: ['mcp__notion__search'], account: 'Engineering', ...overrides,
+  })
+}
+
 function apiFixture(connectors: ConnectorView[] = [], items: CatalogConnector[] = [amap, notion]) {
   const catalog = {
     catalog: { schemaVersion: 1 as const, revision: 'test.1', connectors: items },
@@ -93,6 +100,14 @@ function apiFixture(connectors: ConnectorView[] = [], items: CatalogConnector[] 
     refreshCatalog: vi.fn().mockResolvedValue(catalog),
     listConnectors: vi.fn().mockResolvedValue(connectors),
     connectApiKey: vi.fn().mockImplementation(async id => view({ id })),
+    startOAuth: vi.fn().mockResolvedValue({
+      attemptId: '00000000-0000-4000-8000-000000000001',
+      authorizationUrl: 'https://example.com/authorize?state=state-1',
+    }),
+    oauthStatus: vi.fn().mockResolvedValue({
+      attemptId: '00000000-0000-4000-8000-000000000001', connectorId: 'notion', status: 'waiting', error: null,
+    }),
+    cancelOAuth: vi.fn().mockResolvedValue({ cancelled: true }),
     probe: vi.fn().mockImplementation(async id => view({ id })),
     remount: vi.fn().mockImplementation(async id => view({ id })),
     setEnabled: vi.fn().mockImplementation(async (id, enabled) => view({ id, enabled, status: enabled ? 'connected' : 'disabled' })),
@@ -101,12 +116,17 @@ function apiFixture(connectors: ConnectorView[] = [], items: CatalogConnector[] 
   return api
 }
 
-function renderHub(api: ConnectorHubApi) {
+function renderHub(api: ConnectorHubApi, options: {
+  openWindow?: (url: string) => Window | null
+  copyText?: (text: string) => Promise<void>
+} = {}) {
   return render(createElement(ConnectorHub, {
     api,
     t: (key: LocaleKey) => zh[key],
     resolveText: (text: LocalizedText) => text.zh,
     pollMs: 1_000_000,
+    oauthPollMs: 10,
+    ...options,
   }))
 }
 
@@ -115,7 +135,7 @@ async function openActions(name = '高德地图') {
 }
 
 describe('connector hub browser UI', () => {
-  it('renders the catalog, starts on Discover when empty, and disables OAuth', async () => {
+  it('renders the catalog, starts on Discover when empty, and enables OAuth', async () => {
     const api = apiFixture()
     renderHub(api)
 
@@ -125,8 +145,8 @@ describe('connector hub browser UI', () => {
     expect(screen.getAllByText('官方服务')).toHaveLength(2)
 
     const oauthCard = screen.getByTestId('connector-card-notion')
-    expect(within(oauthCard).getByRole('button', { name: '添加' })).toHaveProperty('disabled', true)
-    expect(within(oauthCard).getByText('OAuth 授权将在 M3 提供')).toBeTruthy()
+    expect(within(oauthCard).getByRole('button', { name: '添加' })).toHaveProperty('disabled', false)
+    expect(within(oauthCard).queryByText('OAuth 授权将在 M3 提供')).toBeNull()
   })
 
   it('starts on Mine when connectors exist and expands operational details', async () => {
@@ -268,5 +288,111 @@ describe('connector hub browser UI', () => {
     await waitFor(() => expect(api.remove).toHaveBeenCalledWith('amap'))
     expect(await screen.findByText('已删除连接器及其凭据。')).toBeTruthy()
     expect(await screen.findByText('还没有添加连接器')).toBeTruthy()
+  })
+
+  it('opens a blank window synchronously, completes OAuth and displays the authorized account', async () => {
+    const api = apiFixture()
+    const order: string[] = []
+    let resolveStart!: (value: { attemptId: string, authorizationUrl: string }) => void
+    vi.mocked(api.startOAuth).mockImplementation(() => {
+      order.push('start')
+      return new Promise(resolve => { resolveStart = resolve })
+    })
+    const popup = {
+      closed: false,
+      location: { href: 'about:blank' },
+      close: vi.fn(() => { Object.assign(popup, { closed: true }) }),
+    } as unknown as Window
+    const openWindow = vi.fn(() => {
+      order.push('open')
+      return popup
+    })
+    vi.mocked(api.oauthStatus).mockResolvedValue({
+      attemptId: '00000000-0000-4000-8000-000000000001', connectorId: 'notion', status: 'success', error: null,
+    })
+    vi.mocked(api.listConnectors).mockResolvedValueOnce([]).mockResolvedValue([oauthView()])
+    renderHub(api, { openWindow })
+
+    await userEvent.click(within(await screen.findByTestId('connector-card-notion')).getByRole('button', { name: '添加' }))
+    await userEvent.click(screen.getByRole('button', { name: '前往授权' }))
+    expect(order).toEqual(['open', 'start'])
+    resolveStart({
+      attemptId: '00000000-0000-4000-8000-000000000001',
+      authorizationUrl: 'https://example.com/authorize?state=state-1',
+    })
+    await waitFor(() => expect(popup.location.href).toBe('https://example.com/authorize?state=state-1'))
+    expect(await screen.findByText('OAuth 授权成功，所有会话现在都可以使用它的工具。')).toBeTruthy()
+    expect(await screen.findByText('授权账号: Engineering')).toBeTruthy()
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull(), { timeout: 2000 })
+    await userEvent.click(screen.getByRole('tab', { name: '我的' }))
+    expect(within(screen.getByTestId('mine-row-notion')).getAllByText('Engineering').length).toBeGreaterThan(0)
+  })
+
+  it('copies an OAuth link when the popup is blocked and cancels the Host attempt', async () => {
+    const api = apiFixture()
+    const copyText = vi.fn().mockResolvedValue(undefined)
+    renderHub(api, { openWindow: () => null, copyText })
+
+    await userEvent.click(within(await screen.findByTestId('connector-card-notion')).getByRole('button', { name: '添加' }))
+    await userEvent.click(screen.getByRole('button', { name: '前往授权' }))
+    expect(await screen.findByText('等待授权…')).toBeTruthy()
+    expect(screen.getByText('新窗口未打开，请复制链接或手动打开授权页。')).toBeTruthy()
+    await userEvent.click(screen.getByRole('button', { name: '复制链接' }))
+    await waitFor(() => expect(copyText).toHaveBeenCalledWith('https://example.com/authorize?state=state-1'))
+    expect(await screen.findByText('授权链接已复制。')).toBeTruthy()
+    await userEvent.click(screen.getByRole('button', { name: '取消' }))
+    await waitFor(() => expect(api.cancelOAuth).toHaveBeenCalledWith('00000000-0000-4000-8000-000000000001'))
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('shows OAuth failures and starts a fresh attempt on retry', async () => {
+    const api = apiFixture()
+    vi.mocked(api.startOAuth)
+      .mockResolvedValueOnce({
+        attemptId: '00000000-0000-4000-8000-000000000001',
+        authorizationUrl: 'https://example.com/authorize?state=state-1',
+      })
+      .mockResolvedValueOnce({
+        attemptId: '00000000-0000-4000-8000-000000000002',
+        authorizationUrl: 'https://example.com/authorize?state=state-2',
+      })
+    vi.mocked(api.oauthStatus).mockResolvedValueOnce({
+      attemptId: '00000000-0000-4000-8000-000000000001', connectorId: 'notion', status: 'failed', error: 'authorization expired',
+    }).mockResolvedValue({
+      attemptId: '00000000-0000-4000-8000-000000000002', connectorId: 'notion', status: 'waiting', error: null,
+    })
+    renderHub(api, { openWindow: () => null })
+
+    await userEvent.click(within(await screen.findByTestId('connector-card-notion')).getByRole('button', { name: '添加' }))
+    await userEvent.click(screen.getByRole('button', { name: '前往授权' }))
+    expect(await screen.findByRole('alert')).toHaveProperty('textContent', 'authorization expired')
+    await userEvent.click(screen.getByRole('button', { name: '重试' }))
+    await waitFor(() => expect(api.startOAuth).toHaveBeenCalledTimes(2))
+    expect(await screen.findByText('等待授权…')).toBeTruthy()
+    await userEvent.click(screen.getByRole('button', { name: '取消' }))
+    await waitFor(() => expect(api.cancelOAuth).toHaveBeenCalledWith('00000000-0000-4000-8000-000000000002'))
+  })
+
+  it('reauthorizes from Mine and refreshes the displayed account', async () => {
+    const initial = oauthView({ status: 'reauth-required', tools: [], account: 'Old workspace' })
+    const updated = oauthView({ account: 'New workspace' })
+    const api = apiFixture([initial])
+    vi.mocked(api.probe).mockResolvedValue(initial)
+    vi.mocked(api.listConnectors).mockResolvedValueOnce([initial]).mockResolvedValue([updated])
+    vi.mocked(api.oauthStatus).mockResolvedValue({
+      attemptId: '00000000-0000-4000-8000-000000000001', connectorId: 'notion', status: 'success', error: null,
+    })
+    renderHub(api, { openWindow: () => null })
+    await screen.findByTestId('mine-row-notion')
+
+    await openActions('Notion')
+    const reauthorize = screen.getByRole('menuitem', { name: '重新授权' })
+    expect(reauthorize).toHaveProperty('disabled', false)
+    await userEvent.click(reauthorize)
+    await userEvent.click(screen.getByRole('button', { name: '前往授权' }))
+    await waitFor(() => expect(api.startOAuth).toHaveBeenCalledWith('notion'))
+    expect(await screen.findByText('OAuth 重新授权成功。')).toBeTruthy()
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull(), { timeout: 2000 })
+    expect(within(screen.getByTestId('mine-row-notion')).getAllByText('New workspace').length).toBeGreaterThan(0)
   })
 })

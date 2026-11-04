@@ -40,4 +40,25 @@ describe('connector hub browser API', () => {
     const api = createConnectorHubApi(fetchImpl)
     await expect(api.listConnectors()).rejects.toMatchObject({ message: 'HTTP 503', status: 503 })
   })
+
+  it('uses attempt IDs for OAuth start, polling and cancellation', async () => {
+    const fetchImpl = vi.fn()
+      .mockResolvedValueOnce(Response.json({ attemptId: 'attempt-1', authorizationUrl: 'https://example.com/auth' }))
+      .mockResolvedValueOnce(Response.json({ attemptId: 'attempt-1', status: 'waiting' }))
+      .mockResolvedValueOnce(Response.json({ cancelled: true }))
+    const api = createConnectorHubApi(fetchImpl)
+
+    await api.startOAuth('notion')
+    await api.oauthStatus('attempt-1')
+    await api.cancelOAuth('attempt-1')
+
+    expect(fetchImpl.mock.calls.map(call => call[0])).toEqual([
+      'api/connector-hub/oauth-start',
+      'api/connector-hub/oauth-status',
+      'api/connector-hub/oauth-cancel',
+    ])
+    expect(fetchImpl.mock.calls.map(call => JSON.parse(call[1].body))).toEqual([
+      { id: 'notion' }, { attemptId: 'attempt-1' }, { attemptId: 'attempt-1' },
+    ])
+  })
 })

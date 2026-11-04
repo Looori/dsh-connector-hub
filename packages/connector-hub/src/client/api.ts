@@ -1,4 +1,5 @@
 import type { CatalogResult } from '../host/catalog'
+import type { OAuthAttemptView, OAuthStartResult } from '../host/oauth'
 import type { ConnectorView } from '../host/service'
 
 export type CatalogResponse = CatalogResult & { updates: string[] }
@@ -9,6 +10,9 @@ export interface ConnectorHubApi {
   refreshCatalog(): Promise<CatalogResponse>
   listConnectors(): Promise<ConnectorView[]>
   connectApiKey(id: string, key: string): Promise<ConnectorView>
+  startOAuth(id: string): Promise<OAuthStartResult>
+  oauthStatus(attemptId: string): Promise<OAuthAttemptView>
+  cancelOAuth(attemptId: string): Promise<{ cancelled: true }>
   probe(id: string): Promise<ConnectorView>
   remount(id: string): Promise<ConnectorView>
   setEnabled(id: string, enabled: boolean): Promise<ConnectorView>
@@ -49,6 +53,9 @@ export function createConnectorHubApi(fetchImpl: FetchImplementation = globalThi
     refreshCatalog: () => post<CatalogResponse>('catalog-refresh'),
     listConnectors: () => request<ConnectorView[]>('connectors'),
     connectApiKey: (id, key) => post<ConnectorView>('api-key-connect', { id, key }),
+    startOAuth: id => post<OAuthStartResult>('oauth-start', { id }),
+    oauthStatus: attemptId => post<OAuthAttemptView>('oauth-status', { attemptId }),
+    cancelOAuth: attemptId => post<{ cancelled: true }>('oauth-cancel', { attemptId }),
     probe: id => post<ConnectorView>('probe', { id }),
     remount: id => post<ConnectorView>('remount', { id }),
     setEnabled: (id, enabled) => post<ConnectorView>('set-enabled', { id, enabled }),

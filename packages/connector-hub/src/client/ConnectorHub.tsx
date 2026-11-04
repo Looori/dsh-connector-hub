@@ -20,11 +20,13 @@ import { createConnectorHubApi, type CatalogResponse, type ConnectorHubApi } fro
 import type { LocaleKey, Translate } from './locales'
 
 const DEFAULT_POLL_MS = 60_000
+const OAUTH_POLL_MS = 500
+const OAUTH_SUCCESS_CLOSE_MS = 900
 
 type Page = 'mine' | 'discover'
 type KeyMode = 'add' | 'replace'
 
-interface KeyTarget {
+interface AuthorizationTarget {
   connector: CatalogConnector
   mode: KeyMode
 }
@@ -34,6 +36,9 @@ export interface ConnectorHubProps {
   api?: ConnectorHubApi
   resolveText?: (text: LocalizedText) => string
   pollMs?: number
+  oauthPollMs?: number
+  openWindow?: (url: string, target?: string, features?: string) => Window | null
+  copyText?: (text: string) => Promise<void>
 }
 
 /** The two-page connector UI. Credentials are passed to Host and never retained by this component. */
@@ -42,6 +47,9 @@ export function ConnectorHub({
   api: providedApi,
   resolveText = defaultResolveText,
   pollMs = DEFAULT_POLL_MS,
+  oauthPollMs = OAUTH_POLL_MS,
+  openWindow,
+  copyText,
 }: ConnectorHubProps): ReactNode {
   const api = useMemo(() => providedApi ?? createConnectorHubApi(), [providedApi])
   const [catalog, setCatalog] = useState<CatalogResponse | null>(null)
@@ -54,7 +62,8 @@ export function ConnectorHub({
   const [catalogBusy, setCatalogBusy] = useState(false)
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set())
   const [menuId, setMenuId] = useState<string | null>(null)
-  const [keyTarget, setKeyTarget] = useState<KeyTarget | null>(null)
+  const [keyTarget, setKeyTarget] = useState<AuthorizationTarget | null>(null)
+  const [oauthTarget, setOauthTarget] = useState<AuthorizationTarget | null>(null)
   const [removeTarget, setRemoveTarget] = useState<CatalogConnector | null>(null)
   const [toast, setToast] = useState<{ id: number, text: string } | null>(null)
   const toastSequence = useRef(0)
@@ -63,7 +72,7 @@ export function ConnectorHub({
     setToast({ id: ++toastSequence.current, text })
   }, [])
 
-  const refresh = useCallback(async (probeOnOpen = false) => {
+  const refresh = useCallback(async (probeOnOpen = false): Promise<ConnectorView[] | null> => {
     try {
       const [nextCatalog, nextConnectors] = await Promise.all([api.getCatalog(), api.listConnectors()])
       setCatalog(nextCatalog)
@@ -77,11 +86,15 @@ export function ConnectorHub({
           try { return await api.probe(item.id) } catch { return null }
         }))
         const byId = new Map(probes.filter(item => item !== null).map(item => [item.id, item]))
-        setConnectors(current => current?.map(item => byId.get(item.id) ?? item) ?? current)
+        const probed = nextConnectors.map(item => byId.get(item.id) ?? item)
+        setConnectors(probed)
+        return probed
       }
+      return nextConnectors
     } catch (error) {
       setLoadError(errorMessage(error))
       setLoading(false)
+      return null
     }
   }, [api])
 
@@ -122,6 +135,12 @@ export function ConnectorHub({
     await api.connectApiKey(keyTarget.connector.id, key)
     showToast(t(keyTarget.mode === 'add' ? 'addedToast' : 'replacedToast'))
     await refresh()
+  }
+
+  async function completeOAuth(target: AuthorizationTarget): Promise<string | null> {
+    const next = await refresh()
+    showToast(t(target.mode === 'add' ? 'authorizedToast' : 'reauthorizedToast'))
+    return next?.find(item => item.id === target.connector.id)?.account ?? null
   }
 
   function toggleExpanded(id: string): void {
@@ -173,7 +192,11 @@ export function ConnectorHub({
             catalog={catalog}
             connectors={connectors}
             resolveText={resolveText}
-            onAdd={connector => setKeyTarget({ connector, mode: 'add' })}
+            onAdd={connector => {
+              const target = { connector, mode: 'add' as const }
+              if (connector.auth.type === 'oauth') setOauthTarget(target)
+              else setKeyTarget(target)
+            }}
           />
         </section>
       )}
@@ -215,6 +238,7 @@ export function ConnectorHub({
                       enabled ? 'enabledToast' : 'disabledToast',
                     ) }}
                     onReplaceKey={() => setKeyTarget({ connector: catalogItem ?? catalogItemFromView(connector), mode: 'replace' })}
+                    onReauthorize={() => setOauthTarget({ connector: catalogItem ?? catalogItemFromView(connector), mode: 'replace' })}
                     onRemove={() => setRemoveTarget(catalogItem ?? catalogItemFromView(connector))}
                   />
                 )
@@ -233,6 +257,21 @@ export function ConnectorHub({
           resolveText={resolveText}
           onClose={() => setKeyTarget(null)}
           onSave={saveKey}
+        />
+      )}
+      {oauthTarget !== null && (
+        <OAuthModal
+          key={`${oauthTarget.connector.id}:${oauthTarget.mode}`}
+          t={t}
+          connector={oauthTarget.connector}
+          mode={oauthTarget.mode}
+          resolveText={resolveText}
+          api={api}
+          pollMs={oauthPollMs}
+          openWindow={openWindow}
+          copyText={copyText}
+          onClose={() => setOauthTarget(null)}
+          onAuthorized={() => completeOAuth(oauthTarget)}
         />
       )}
       {removeTarget !== null && (
@@ -270,7 +309,6 @@ function DiscoverPage({ t, catalog, connectors, resolveText, onAdd }: DiscoverPa
     <div style={styles.grid}>
       {catalog.catalog.connectors.map(connector => {
         const isAdded = added.has(connector.id)
-        const oauth = connector.auth.type === 'oauth'
         return (
           <article key={connector.id} style={styles.card} data-testid={`connector-card-${connector.id}`}>
             <div style={styles.cardHead}>
@@ -282,8 +320,7 @@ function DiscoverPage({ t, catalog, connectors, resolveText, onAdd }: DiscoverPa
               <Button
                 size="sm"
                 variant={isAdded ? 'outline' : 'primary'}
-                disabled={isAdded || connector.auth.type !== 'api-key'}
-                title={oauth ? t('oauthM3') : undefined}
+                disabled={isAdded || connector.auth.type === 'none'}
                 onClick={() => onAdd(connector)}
               >
                 {isAdded ? t('added') : t('add')}
@@ -294,7 +331,6 @@ function DiscoverPage({ t, catalog, connectors, resolveText, onAdd }: DiscoverPa
               <Tag tone="neutral">{authLabel(connector.auth.type, t)}</Tag>
               {connector.official && <Tag tone="info">{t('official')}</Tag>}
             </div>
-            {oauth && !isAdded && <div style={styles.hint}>{t('oauthM3')}</div>}
           </article>
         )
       })}
@@ -316,6 +352,7 @@ interface MineRowProps {
   onRemount: () => void
   onSetEnabled: (enabled: boolean) => void
   onReplaceKey: () => void
+  onReauthorize: () => void
   onRemove: () => void
 }
 
@@ -328,7 +365,7 @@ function MineRow(props: MineRowProps): ReactNode {
     { id: 'probe', label: t('probe'), disabled: props.busy || !connector.enabled },
     { id: 'remount', label: t('remount'), disabled: props.busy || !connector.enabled },
     ...(apiKey ? [{ id: 'replace-key', label: t('replaceKey'), disabled: props.busy }] : []),
-    ...(oauth ? [{ id: 'reauthorize', label: t('reauthorize'), disabled: true }] : []),
+    ...(oauth ? [{ id: 'reauthorize', label: t('reauthorize'), disabled: props.busy }] : []),
     { id: 'remove', label: t('remove'), danger: true, disabled: props.busy },
   ]
 
@@ -346,6 +383,7 @@ function MineRow(props: MineRowProps): ReactNode {
         collapsedContent={(
           <span style={styles.rowSummary}>
             <Status status={connector.status} t={t} />
+            {connector.account && <span style={styles.muted}>{connector.account}</span>}
             {connector.status === 'failed' && connector.enabled && (
               <Button size="sm" variant="outline" disabled={props.busy} onClick={event => {
                 event.stopPropagation()
@@ -370,6 +408,7 @@ function MineRow(props: MineRowProps): ReactNode {
                 if (id === 'probe') props.onProbe()
                 if (id === 'remount') props.onRemount()
                 if (id === 'replace-key') props.onReplaceKey()
+                if (id === 'reauthorize') props.onReauthorize()
                 if (id === 'remove') props.onRemove()
               }}
               items={menuItems}
@@ -391,6 +430,12 @@ function MineRow(props: MineRowProps): ReactNode {
         <dl style={styles.details}>
           <dt>{t('tools')}</dt>
           <dd>{connector.tools.length > 0 ? connector.tools.map(tool => <code key={tool} style={styles.tool}>{tool}</code>) : t('noTools')}</dd>
+          {connector.account && (
+            <>
+              <dt>{t('account')}</dt>
+              <dd>{connector.account}</dd>
+            </>
+          )}
           <dt>{t('serviceAddress')}</dt>
           <dd><code>{connector.remote.url}</code></dd>
           <dt>{t('lastProbe')}</dt>
@@ -404,6 +449,195 @@ function MineRow(props: MineRowProps): ReactNode {
         </dl>
       </DisclosureRow>
     </article>
+  )
+}
+
+type OAuthPhase = 'idle' | 'starting' | 'waiting' | 'cancelling' | 'failed' | 'success'
+
+interface OAuthModalProps {
+  t: Translate
+  connector: CatalogConnector
+  mode: KeyMode
+  resolveText: (text: LocalizedText) => string
+  api: ConnectorHubApi
+  pollMs: number
+  openWindow?: (url: string, target?: string, features?: string) => Window | null
+  copyText?: (text: string) => Promise<void>
+  onClose: () => void
+  onAuthorized: () => Promise<string | null>
+}
+
+function OAuthModal({
+  t, connector, mode, resolveText, api, pollMs, openWindow, copyText, onClose, onAuthorized,
+}: OAuthModalProps): ReactNode {
+  const [phase, setPhase] = useState<OAuthPhase>('idle')
+  const [attemptId, setAttemptId] = useState<string | null>(null)
+  const [authorizationUrl, setAuthorizationUrl] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
+  const [account, setAccount] = useState<string | null>(null)
+  const popup = useRef<Window | null>(null)
+  const authorized = useRef(onAuthorized)
+  authorized.current = onAuthorized
+
+  useEffect(() => {
+    if (phase !== 'waiting' || attemptId === null) return
+    let active = true
+    let checking = false
+    const check = async () => {
+      if (checking) return
+      checking = true
+      try {
+        const result = await api.oauthStatus(attemptId)
+        if (!active) return
+        if (result.status === 'failed') {
+          setError(result.error ?? t('oauthIntro'))
+          setPhase('failed')
+        } else if (result.status === 'success') {
+          const name = await authorized.current()
+          if (!active) return
+          setAccount(name)
+          setError(null)
+          setPhase('success')
+        } else {
+          setError(null)
+        }
+      } catch (cause) {
+        if (active) setError(errorMessage(cause))
+      } finally {
+        checking = false
+      }
+    }
+    void check()
+    const timer = setInterval(() => { void check() }, pollMs)
+    return () => {
+      active = false
+      clearInterval(timer)
+    }
+  }, [api, attemptId, phase, pollMs, t])
+
+  useEffect(() => {
+    if (phase !== 'success') return
+    const timer = setTimeout(() => {
+      popup.current?.close()
+      onClose()
+    }, OAUTH_SUCCESS_CLOSE_MS)
+    return () => clearTimeout(timer)
+  }, [onClose, phase])
+
+  async function start(): Promise<void> {
+    setError(null)
+    setCopied(false)
+    setAccount(null)
+    setAttemptId(null)
+    setAuthorizationUrl(null)
+    setPhase('starting')
+    try {
+      popup.current = openWindow
+        ? openWindow('about:blank', '_blank')
+        : window.open('about:blank', '_blank')
+    } catch {
+      popup.current = null
+    }
+    try {
+      const started = await api.startOAuth(connector.id)
+      setAttemptId(started.attemptId)
+      setAuthorizationUrl(started.authorizationUrl)
+      if (popup.current && !popup.current.closed) {
+        try { popup.current.location.href = started.authorizationUrl } catch { /* Manual link remains available. */ }
+      }
+      setPhase('waiting')
+    } catch (cause) {
+      popup.current?.close()
+      popup.current = null
+      setError(errorMessage(cause))
+      setPhase('failed')
+    }
+  }
+
+  async function copyLink(): Promise<void> {
+    if (!authorizationUrl) return
+    try {
+      if (copyText) await copyText(authorizationUrl)
+      else await navigator.clipboard.writeText(authorizationUrl)
+      setCopied(true)
+      setError(null)
+    } catch (cause) {
+      setCopied(false)
+      setError(`${t('authorizationCopyFailed')} ${errorMessage(cause)}`)
+    }
+  }
+
+  async function cancel(): Promise<void> {
+    if (attemptId === null) {
+      onClose()
+      return
+    }
+    setPhase('cancelling')
+    try {
+      await api.cancelOAuth(attemptId)
+      popup.current?.close()
+      onClose()
+    } catch (cause) {
+      setError(errorMessage(cause))
+      setPhase('waiting')
+    }
+  }
+
+  function close(): void {
+    if (phase === 'waiting') void cancel()
+    else if (phase !== 'starting' && phase !== 'cancelling') {
+      popup.current?.close()
+      onClose()
+    }
+  }
+
+  return (
+    <Modal
+      open
+      onClose={close}
+      title={t(mode === 'add' ? 'addOauthTitle' : 'reauthorizeOauthTitle')}
+      description={resolveText(connector.name)}
+      closeLabel={t('close')}
+      footer={(
+        <div style={styles.modalFooter}>
+          {phase !== 'success' && (
+            <Button variant="ghost" disabled={phase === 'starting' || phase === 'cancelling'} onClick={close}>
+              {t('cancel')}
+            </Button>
+          )}
+          {(phase === 'idle' || phase === 'failed') && (
+            <Button variant="primary" onClick={() => { void start() }}>
+              {phase === 'failed' ? t('retry') : t('goAuthorize')}
+            </Button>
+          )}
+          {phase === 'waiting' && (
+            <Button variant="primary" onClick={() => { void copyLink() }}>{t('copyAuthorizationLink')}</Button>
+          )}
+          {phase === 'success' && <Button variant="primary" onClick={close}>{t('close')}</Button>}
+        </div>
+      )}
+    >
+      <div style={styles.form}>
+        {phase === 'idle' && <p style={styles.muted}>{t('oauthIntro')}</p>}
+        {(phase === 'starting' || phase === 'cancelling') && <p style={styles.muted}>{t('startingOauth')}</p>}
+        {phase === 'waiting' && (
+          <>
+            <p style={styles.muted}>{t('waitingOauth')}</p>
+            {popup.current === null && <p style={styles.hint}>{t('popupBlocked')}</p>}
+            {copied && <p role="status" style={styles.muted}>{t('authorizationLinkCopied')}</p>}
+            {authorizationUrl && <a href={authorizationUrl} target="_blank" rel="noreferrer">{t('openAuthorizationPage')}</a>}
+          </>
+        )}
+        {phase === 'success' && (
+          <div role="status">
+            <strong>{t('oauthSucceeded')}</strong>
+            {account && <div style={styles.muted}>{t('account')}: {account}</div>}
+          </div>
+        )}
+        {error !== null && <div role="alert" style={styles.error}>{error}</div>}
+      </div>
+    </Modal>
   )
 }
 
