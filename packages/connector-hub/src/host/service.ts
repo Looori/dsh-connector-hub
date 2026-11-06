@@ -1,7 +1,8 @@
-import type { Catalog } from '../shared/catalog'
+import type { CatalogUpdate } from '../shared/catalog'
 import type { ConnectorConfig, StoredConnector } from '../shared/config'
 import type { ConnectorProbeResult } from '../shared/status'
 import { CatalogService, type CatalogResult } from './catalog'
+import { catalogUpdates } from './catalog-updates'
 import { probeApiKeyConnector, probeConnector, probeOAuthConnector } from './health'
 import { MountManager, type ConnectorMountSnapshot } from './mounts'
 import { maskAccountName } from './oauth-account'
@@ -25,6 +26,11 @@ export interface ConnectorView extends ConnectorMountSnapshot {
   auth: StoredConnector['auth']
   lastProbe: ConnectorProbeResult | null
   account?: string | null
+  catalogUpdate: Omit<CatalogUpdate, 'id'> | null
+}
+
+export interface CatalogUpdateApplicationOptions {
+  applyCatalogUpdate?: boolean
 }
 
 interface GatewayEndpoints {
@@ -83,17 +89,17 @@ export class ConnectorHubService {
     await this.mounts.reconcile(config.connectors)
   }
 
-  async getCatalog(): Promise<CatalogResult & { updates: string[] }> {
+  async getCatalog(): Promise<CatalogResult & { updates: CatalogUpdate[] }> {
     const result = await this.catalog.load()
     const config = this.store.snapshot() ?? await this.store.read()
-    return { ...result, updates: changedConnectors(config, result.catalog) }
+    return { ...result, updates: catalogUpdates(config, result.catalog) }
   }
 
-  refreshCatalog(): Promise<CatalogResult & { updates: string[] }> {
+  refreshCatalog(): Promise<CatalogResult & { updates: CatalogUpdate[] }> {
     return this.serialize(async () => {
       const result = await this.catalog.load(true)
       const config = await this.store.read()
-      return { ...result, updates: changedConnectors(config, result.catalog) }
+      return { ...result, updates: catalogUpdates(config, result.catalog) }
     })
   }
 
@@ -104,48 +110,59 @@ export class ConnectorHubService {
     })
   }
 
-  connectApiKey(id: string, key: string): Promise<ConnectorView> {
+  connectApiKey(id: string, key?: string, options: CatalogUpdateApplicationOptions = {}): Promise<ConnectorView> {
     return this.serialize(async () => {
-      if (!key) throw new ConnectorHubError('API Key must not be empty')
       const config = await this.sync()
-      const catalogResult = await this.catalog.load()
-      const item = catalogResult.catalog.connectors.find(connector => connector.id === id)
-      if (!item) throw new ConnectorHubError('Unknown connector id', 404)
-      if (item.auth.type !== 'api-key') throw new ConnectorHubError('Connector does not use API Key authentication')
-
-      const existing = config.connectors[id]
-      const candidate: StoredConnector = {
-        catalogRevision: catalogResult.catalog.revision,
-        remote: structuredClone(item.remote),
-        auth: structuredClone(item.auth),
-        enabled: existing?.enabled ?? true,
-        addedAt: existing?.addedAt ?? this.now().toISOString(),
+      const applyCatalogUpdate = options.applyCatalogUpdate === true
+      const { candidate, existing } = await this.connectionCandidate(config, id, applyCatalogUpdate)
+      if (candidate.auth.type !== 'api-key') throw new ConnectorHubError('Connector does not use API Key authentication')
+      let candidateKey = key
+      if (candidateKey === undefined && applyCatalogUpdate && existing) {
+        const secret = await this.secrets.read(id)
+        if (secret && 'apiKey' in secret) candidateKey = secret.apiKey
       }
-      const probe = await this.probeCandidate(id, candidate, key)
+      if (!candidateKey) throw new ConnectorHubError('API Key must not be empty')
+      const probe = await this.probeCandidate(id, candidate, candidateKey)
       if (!probe.ok) throw new ConnectorHubError(probe.error ?? 'API Key probe failed')
-      return this.commitCandidate(config, id, candidate, { v: 1, apiKey: key }, probe)
+      return this.commitCandidate(config, id, candidate, { v: 1, apiKey: candidateKey }, probe)
     })
   }
 
-  startOAuth(id: string): Promise<OAuthStartResult> {
+  startOAuth(id: string, options: CatalogUpdateApplicationOptions = {}): Promise<OAuthStartResult> {
     return this.serialize(async () => {
       if (!this.oauth) throw new ConnectorHubError('OAuth support is unavailable', 500)
       const config = await this.sync()
-      const catalogResult = await this.catalog.load()
-      const item = catalogResult.catalog.connectors.find(connector => connector.id === id)
-      if (!item) throw new ConnectorHubError('Unknown connector id', 404)
-      const existing = config.connectors[id]
-      const source = existing ?? item
-      if (source.auth.type !== 'oauth') throw new ConnectorHubError('Connector does not use OAuth authentication')
-      const candidate: StoredConnector = {
-        catalogRevision: existing?.catalogRevision ?? catalogResult.catalog.revision,
+      const { candidate } = await this.connectionCandidate(config, id, options.applyCatalogUpdate === true)
+      if (candidate.auth.type !== 'oauth') throw new ConnectorHubError('Connector does not use OAuth authentication')
+      return this.oauth.start(id, candidate, secret => this.completeOAuth(id, candidate, secret))
+    })
+  }
+
+  private async connectionCandidate(
+    config: ConnectorConfig,
+    id: string,
+    applyCatalogUpdate: boolean,
+  ): Promise<{ candidate: StoredConnector, existing: StoredConnector | undefined }> {
+    const catalogResult = await this.catalog.load()
+    const existing = config.connectors[id]
+    const item = catalogResult.catalog.connectors.find(connector => connector.id === id)
+    if (applyCatalogUpdate) {
+      const changed = existing && item && catalogUpdates(config, catalogResult.catalog)
+        .some(update => update.id === id && update.kind === 'changed')
+      if (!changed) throw new ConnectorHubError('Catalog update is not available for this connector')
+    }
+    const source = existing && !applyCatalogUpdate ? existing : item
+    if (!source) throw new ConnectorHubError('Unknown connector id', 404)
+    return {
+      existing,
+      candidate: {
+        catalogRevision: existing && !applyCatalogUpdate ? existing.catalogRevision : catalogResult.catalog.revision,
         remote: structuredClone(source.remote),
         auth: structuredClone(source.auth),
         enabled: existing?.enabled ?? true,
         addedAt: existing?.addedAt ?? this.now().toISOString(),
-      }
-      return this.oauth.start(id, candidate, secret => this.completeOAuth(id, candidate, secret))
-    })
+      },
+    }
   }
 
   oauthStatus(attemptId: string): OAuthAttemptView {
@@ -287,11 +304,13 @@ export class ConnectorHubService {
     return config
   }
 
-  private views(config: ConnectorConfig): Promise<ConnectorView[]> {
-    return Promise.all(Object.keys(config.connectors).map(id => this.view(id, config.connectors[id])))
+  private async views(config: ConnectorConfig): Promise<ConnectorView[]> {
+    const result = await this.catalog.load()
+    const updates = catalogUpdates(config, result.catalog)
+    return Promise.all(Object.keys(config.connectors).map(id => this.view(id, config.connectors[id], updates)))
   }
 
-  private async view(id: string, connector: StoredConnector): Promise<ConnectorView> {
+  private async view(id: string, connector: StoredConnector, updates?: CatalogUpdate[]): Promise<ConnectorView> {
     const probe = this.probes.get(id) ?? null
     const mount = this.mounts.list(
       { [id]: connector },
@@ -304,6 +323,12 @@ export class ConnectorHubService {
       const name = secret && 'tokens' in secret ? secret.account?.name : undefined
       if (typeof name === 'string') account = maskAccountName(name)
     }
+    const catalogResult = updates ? undefined : this.catalog.snapshotResult()
+    const currentUpdates = updates ?? (catalogResult ? catalogUpdates({
+      schemaVersion: 1,
+      connectors: { [id]: connector },
+    }, catalogResult.catalog) : [])
+    const catalogUpdate = currentUpdates.find(update => update.id === id) ?? null
     return {
       ...mount,
       catalogRevision: connector.catalogRevision,
@@ -312,6 +337,9 @@ export class ConnectorHubService {
       auth: structuredClone(connector.auth),
       lastProbe: probe,
       account,
+      catalogUpdate: catalogUpdate
+        ? { kind: catalogUpdate.kind, fields: [...catalogUpdate.fields] }
+        : null,
     }
   }
 
@@ -328,12 +356,4 @@ export class ConnectorHubService {
     this.queue = result.then(() => undefined, () => undefined)
     return result
   }
-}
-
-function changedConnectors(config: ConnectorConfig, catalog: Catalog): string[] {
-  return catalog.connectors.filter(item => {
-    const stored = config.connectors[item.id]
-    return stored && JSON.stringify({ remote: stored.remote, auth: stored.auth })
-      !== JSON.stringify({ remote: item.remote, auth: item.auth })
-  }).map(item => item.id)
 }

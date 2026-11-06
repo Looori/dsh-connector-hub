@@ -142,6 +142,33 @@ it('runs OAuth authorization, refresh, reauthorization and revocation through re
     expect(await readFile(configPath, 'utf8')).not.toMatch(/access-|refresh-/)
     expect(await readFile(journal, 'utf8')).toContain('set dsh-connector-hub notion')
 
+    fixture.catalog.connectors[0].auth.scope = 'openid mcp:connect catalog-update'
+    fixture.catalog.revision = 'oauth-e2e.2'
+    const updates = await request('/api/connector-hub/catalog-refresh', 'POST')
+    expect(updates.body.updates).toEqual([{ id: 'notion', kind: 'changed', fields: ['auth.scope'] }])
+    await page.reload()
+    await page.getByText('Plugins', { exact: true }).first().click()
+    await page.getByRole('tab', { name: 'Connectors', exact: true }).click()
+    await row.waitFor()
+    fixture.pauseAuthorization = true
+    await page.getByRole('button', { name: 'Actions: Mock OAuth', exact: true }).click()
+    await page.getByRole('menuitem', { name: 'Apply update', exact: true }).click()
+    const updateDialog = page.getByRole('dialog', { name: 'Apply catalog update' })
+    await updateDialog.waitFor()
+    await updateDialog.getByText('openid mcp:connect → openid mcp:connect catalog-update', { exact: true }).waitFor()
+    await updateDialog.getByRole('button', { name: 'Apply update', exact: true }).click()
+    await page.getByRole('dialog', { name: 'Reauthorize OAuth account' }).waitFor()
+    await page.getByRole('button', { name: 'Authorize', exact: true }).click()
+    await page.getByText('Waiting for authorization…', { exact: true }).waitFor()
+    await page.getByRole('button', { name: 'Cancel', exact: true }).click()
+    await page.getByRole('dialog').waitFor({ state: 'hidden' })
+    expect(JSON.parse(await readFile(configPath, 'utf8')).connectors.notion).toMatchObject({
+      catalogRevision: 'oauth-e2e.1', auth: { scope: 'openid mcp:connect' },
+    })
+    expect((await request('/api/connector-hub/connectors')).body[0]).toMatchObject({ status: 'connected' })
+    expect(fixture.tokenRequests).toHaveLength(1)
+    fixture.pauseAuthorization = false
+
     // A rejected access token causes one refresh and retry without remounting the MCP client.
     fixture.rejectMcpOnce = true
     const refreshed = await request('/api/connector-hub/probe', 'POST', { id: 'notion' })

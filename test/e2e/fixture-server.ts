@@ -6,21 +6,26 @@ export const CONNECTOR_ID = 'mock-api-key'
 export interface FixtureServer {
   origin: string
   catalogUrl: string
+  catalog: ReturnType<typeof catalog>
+  requests: string[]
   close(): Promise<void>
 }
 
 /** Local catalog and stateless Streamable HTTP MCP server; no external network access. */
 export async function startFixtureServer(): Promise<FixtureServer> {
+  const requests: string[] = []
+  let currentCatalog!: ReturnType<typeof catalog>
   const server = createServer(async (request, response) => {
     const url = new URL(request.url ?? '/', 'http://127.0.0.1')
     if (request.method === 'GET' && url.pathname === '/catalog.json') {
-      respondJson(response, 200, catalog(`http://${request.headers.host ?? '127.0.0.1'}`))
+      respondJson(response, 200, currentCatalog)
       return
     }
-    if (url.pathname !== '/mcp') {
+    if (!['/mcp', '/v2/mcp'].includes(url.pathname)) {
       respondJson(response, 404, { error: 'Not found' })
       return
     }
+    requests.push(url.pathname)
     if (request.headers['x-api-key'] !== TEST_API_KEY) {
       respondJson(response, 401, { error: 'Invalid API Key' })
       return
@@ -52,9 +57,12 @@ export async function startFixtureServer(): Promise<FixtureServer> {
   const address = server.address()
   if (address === null || typeof address === 'string') throw new Error('Fixture server did not bind')
   const origin = `http://127.0.0.1:${address.port}`
+  currentCatalog = catalog(origin)
   return {
     origin,
     catalogUrl: `${origin}/catalog.json`,
+    catalog: currentCatalog,
+    requests,
     close: () => closeServer(server),
   }
 }

@@ -61,4 +61,19 @@ describe('connector hub browser API', () => {
       { id: 'notion' }, { attemptId: 'attempt-1' }, { attemptId: 'attempt-1' },
     ])
   })
+
+  it('forwards catalog update options without requiring a reused Key in the request body', async () => {
+    const fetchImpl = vi.fn()
+      .mockResolvedValueOnce(Response.json({ id: 'amap', status: 'connected' }))
+      .mockResolvedValueOnce(Response.json({ attemptId: 'attempt-1', authorizationUrl: 'https://example.com/auth' }))
+    const api = createConnectorHubApi(fetchImpl)
+
+    await api.connectApiKey('amap', undefined, { applyCatalogUpdate: true })
+    await api.startOAuth('notion', { applyCatalogUpdate: true })
+
+    expect(fetchImpl.mock.calls.map(call => JSON.parse(call[1].body))).toEqual([
+      { id: 'amap', applyCatalogUpdate: true },
+      { id: 'notion', applyCatalogUpdate: true },
+    ])
+  })
 })

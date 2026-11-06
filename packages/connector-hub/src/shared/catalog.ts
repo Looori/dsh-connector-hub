@@ -56,3 +56,9 @@ export interface Catalog {
   revision: string
   connectors: CatalogConnector[]
 }
+
+export interface CatalogUpdate {
+  id: string
+  kind: 'changed' | 'removed'
+  fields: string[]
+}

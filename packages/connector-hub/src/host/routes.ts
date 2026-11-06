@@ -23,14 +23,29 @@ export function registerHostRoutes(ctx: Context, service: ConnectorHubService): 
     route('/api/connector-hub/catalog-refresh', 'POST', () => service.refreshCatalog()),
     route('/api/connector-hub/connectors', 'GET', () => service.listConnectors()),
     route('/api/connector-hub/api-key-connect', 'POST', async request => {
-      const body = await jsonBody(request, ['id', 'key'])
-      if (typeof body.key !== 'string' || body.key.length === 0 || body.key.length > 16 * 1024) {
+      const body = await jsonBody(request, ['id'], ['key', 'applyCatalogUpdate'])
+      if (body.applyCatalogUpdate !== undefined && typeof body.applyCatalogUpdate !== 'boolean') {
+        throw new ConnectorHubError('applyCatalogUpdate must be a boolean')
+      }
+      if (body.key === undefined && body.applyCatalogUpdate !== true) {
+        throw new ConnectorHubError('Missing request field: key')
+      }
+      if (body.key !== undefined && (typeof body.key !== 'string' || body.key.length === 0 || body.key.length > 16 * 1024)) {
         throw new ConnectorHubError('Expected a non-empty string API Key')
       }
-      return service.connectApiKey(stringId(body.id), body.key)
+      if (body.applyCatalogUpdate === true) {
+        return service.connectApiKey(stringId(body.id), body.key as string | undefined, { applyCatalogUpdate: true })
+      }
+      return service.connectApiKey(stringId(body.id), body.key as string)
     }),
     route('/api/connector-hub/oauth-start', 'POST', async request => {
-      const body = await jsonBody(request, ['id'])
+      const body = await jsonBody(request, ['id'], ['applyCatalogUpdate'])
+      if (body.applyCatalogUpdate !== undefined && typeof body.applyCatalogUpdate !== 'boolean') {
+        throw new ConnectorHubError('applyCatalogUpdate must be a boolean')
+      }
+      if (body.applyCatalogUpdate === true) {
+        return service.startOAuth(stringId(body.id), { applyCatalogUpdate: true })
+      }
       return service.startOAuth(stringId(body.id))
     }),
     route('/api/connector-hub/oauth-status', 'POST', async request => {
@@ -85,15 +100,19 @@ async function answer(handler: (request: Request) => Promise<Response>, request:
   }
 }
 
-async function jsonBody(request: Request, allowedKeys: string[]): Promise<Record<string, unknown>> {
+async function jsonBody(
+  request: Request,
+  requiredKeys: string[],
+  optionalKeys: string[] = [],
+): Promise<Record<string, unknown>> {
   let value: unknown
   try { value = await request.json() } catch { throw new ConnectorHubError('Request body must be valid JSON') }
   if (!isRecord(value)) throw new ConnectorHubError('Request body must be a JSON object')
-  const allowed = new Set(allowedKeys)
+  const allowed = new Set([...requiredKeys, ...optionalKeys])
   for (const key of Object.keys(value)) {
     if (!allowed.has(key)) throw new ConnectorHubError(`Unexpected request field: ${key}`)
   }
-  for (const key of allowedKeys) {
+  for (const key of requiredKeys) {
     if (!Object.hasOwn(value, key)) throw new ConnectorHubError(`Missing request field: ${key}`)
   }
   return value

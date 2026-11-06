@@ -3,6 +3,7 @@ import { createServer, type Server } from 'node:http'
 export interface OAuthFixtureServer {
   origin: string
   catalogUrl: string
+  catalog: ReturnType<typeof catalog>
   tokenRequests: URLSearchParams[]
   refreshRequests: URLSearchParams[]
   mcpRequests: Array<{ method: string, authorization: string | null, body: unknown }>
@@ -25,12 +26,14 @@ export async function startOAuthFixtureServer(): Promise<OAuthFixtureServer> {
   const refreshRequests: URLSearchParams[] = []
   const mcpRequests: OAuthFixtureServer['mcpRequests'] = []
   let origin = ''
+  let currentCatalog!: ReturnType<typeof catalog>
   let registrationRequests = 0
   let revocationRequests = 0
   let tokenSequence = 0
   const fixture: OAuthFixtureServer = {
     get origin() { return origin },
     get catalogUrl() { return `${origin}/catalog.json` },
+    get catalog() { return currentCatalog },
     tokenRequests,
     refreshRequests,
     mcpRequests,
@@ -50,7 +53,7 @@ export async function startOAuthFixtureServer(): Promise<OAuthFixtureServer> {
   const server = createServer(async (request, response) => {
     const url = new URL(request.url ?? '/', 'http://127.0.0.1')
     if (request.method === 'GET' && url.pathname === '/catalog.json') {
-      respondJson(response, 200, catalog(origin))
+      respondJson(response, 200, currentCatalog)
       return
     }
     if (request.method === 'GET' && url.pathname === '/.well-known/oauth-protected-resource/mcp') {
@@ -151,6 +154,7 @@ export async function startOAuthFixtureServer(): Promise<OAuthFixtureServer> {
   const address = server.address()
   if (address === null || typeof address === 'string') throw new Error('OAuth fixture did not bind')
   origin = `http://127.0.0.1:${address.port}`
+  currentCatalog = catalog(origin)
   return fixture
 }
 

@@ -1,16 +1,17 @@
+import type { CatalogUpdate } from '../shared/catalog'
 import type { CatalogResult } from '../host/catalog'
 import type { OAuthAttemptView, OAuthStartResult } from '../host/oauth'
-import type { ConnectorView } from '../host/service'
+import type { CatalogUpdateApplicationOptions, ConnectorView } from '../host/service'
 
-export type CatalogResponse = CatalogResult & { updates: string[] }
+export type CatalogResponse = CatalogResult & { updates: CatalogUpdate[] }
 export type FetchImplementation = typeof globalThis.fetch
 
 export interface ConnectorHubApi {
   getCatalog(): Promise<CatalogResponse>
   refreshCatalog(): Promise<CatalogResponse>
   listConnectors(): Promise<ConnectorView[]>
-  connectApiKey(id: string, key: string): Promise<ConnectorView>
-  startOAuth(id: string): Promise<OAuthStartResult>
+  connectApiKey(id: string, key?: string, options?: CatalogUpdateApplicationOptions): Promise<ConnectorView>
+  startOAuth(id: string, options?: CatalogUpdateApplicationOptions): Promise<OAuthStartResult>
   oauthStatus(attemptId: string): Promise<OAuthAttemptView>
   cancelOAuth(attemptId: string): Promise<{ cancelled: true }>
   probe(id: string): Promise<ConnectorView>
@@ -52,8 +53,8 @@ export function createConnectorHubApi(fetchImpl: FetchImplementation = globalThi
     getCatalog: () => request<CatalogResponse>('catalog'),
     refreshCatalog: () => post<CatalogResponse>('catalog-refresh'),
     listConnectors: () => request<ConnectorView[]>('connectors'),
-    connectApiKey: (id, key) => post<ConnectorView>('api-key-connect', { id, key }),
-    startOAuth: id => post<OAuthStartResult>('oauth-start', { id }),
+    connectApiKey: (id, key, options) => post<ConnectorView>('api-key-connect', { id, key, ...options }),
+    startOAuth: (id, options) => post<OAuthStartResult>('oauth-start', { id, ...options }),
     oauthStatus: attemptId => post<OAuthAttemptView>('oauth-status', { attemptId }),
     cancelOAuth: attemptId => post<{ cancelled: true }>('oauth-cancel', { attemptId }),
     probe: id => post<ConnectorView>('probe', { id }),

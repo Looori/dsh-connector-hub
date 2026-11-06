@@ -34,6 +34,33 @@ describe('Host routes', () => {
     expect(await response.text()).not.toContain('api-secret')
   })
 
+  it('allows an omitted Key only for catalog updates and forwards the update flag', async () => {
+    const { service, routes } = routeFixture()
+    service.connectApiKey.mockResolvedValue({ id: 'amap', status: 'connected' })
+    service.startOAuth.mockResolvedValue({ attemptId: 'attempt', authorizationUrl: 'https://example.com/auth' })
+    const connect = routes.find(route => route.path.endsWith('/api-key-connect'))
+    const oauth = routes.find(route => route.path.endsWith('/oauth-start'))
+
+    const updated = await connect.fetch(new Request('http://localhost', {
+      method: 'POST', body: JSON.stringify({ id: 'amap', applyCatalogUpdate: true }),
+    }))
+    expect(updated.status).toBe(200)
+    expect(service.connectApiKey).toHaveBeenCalledWith('amap', undefined, { applyCatalogUpdate: true })
+    const missing = await connect.fetch(new Request('http://localhost', {
+      method: 'POST', body: JSON.stringify({ id: 'amap' }),
+    }))
+    expect(missing.status).toBe(400)
+    const invalid = await connect.fetch(new Request('http://localhost', {
+      method: 'POST', body: JSON.stringify({ id: 'amap', key: 'secret', applyCatalogUpdate: 'yes' }),
+    }))
+    expect(invalid.status).toBe(400)
+
+    await oauth.fetch(new Request('http://localhost', {
+      method: 'POST', body: JSON.stringify({ id: 'notion', applyCatalogUpdate: true }),
+    }))
+    expect(service.startOAuth).toHaveBeenCalledWith('notion', { applyCatalogUpdate: true })
+  })
+
   it.each([
     [{ id: 'amap', key: 'secret', url: 'https://attacker.example' }, 'Unexpected request field'],
     [{ id: 'amap' }, 'Missing request field'],

@@ -171,8 +171,130 @@ describe('ConnectorHubService API Key lifecycle', () => {
     fixture.catalogValue.connectors[0].remote.url = 'https://example.com/v2/mcp'
 
     const result = await fixture.service.refreshCatalog()
-    expect(result.updates).toEqual(['amap'])
+    expect(result.updates).toEqual([{ id: 'amap', kind: 'changed', fields: ['remote.url'] }])
     expect((await fixture.store.read()).connectors.amap.remote.url).toBe('https://example.com/mcp')
+  })
+
+  it('keeps saved remote, auth and revision when replacing a Key after a catalog update', async () => {
+    const fixture = await startFixture()
+    await fixture.service.connectApiKey('amap', 'old-secret')
+    fixture.catalogValue.connectors[0].remote.url = 'https://example.com/v2/mcp'
+    fixture.catalogValue.connectors[0].auth.name = 'ak'
+    fixture.catalogValue.revision = '2026-11-06.1'
+    await fixture.service.refreshCatalog()
+
+    const view = await fixture.service.connectApiKey('amap', 'new-secret')
+    const stored = (await fixture.store.read()).connectors.amap
+    expect(stored).toMatchObject({
+      catalogRevision: '2026-11-03.2',
+      remote: { url: 'https://example.com/mcp' },
+      auth: { name: 'key' },
+    })
+    expect(view.catalogUpdate).toEqual({ kind: 'changed', fields: ['auth.name', 'remote.url'] })
+    expect(await fixture.secrets.read('amap')).toEqual({ v: 1, apiKey: 'new-secret' })
+  })
+
+  it('applies a catalog update with the saved Key and updates config and revision', async () => {
+    const seen = []
+    const fixture = await startFixture({
+      probeCandidate: async (id, connector, key) => {
+        seen.push({ connector, key })
+        return probe(true)
+      },
+    })
+    await fixture.service.connectApiKey('amap', 'saved-secret')
+    fixture.catalogValue.connectors[0].remote.url = 'https://example.com/v2/mcp'
+    fixture.catalogValue.connectors[0].auth.name = 'ak'
+    fixture.catalogValue.revision = '2026-11-06.1'
+    await fixture.service.refreshCatalog()
+
+    const view = await fixture.service.connectApiKey('amap', undefined, { applyCatalogUpdate: true })
+    const stored = (await fixture.store.read()).connectors.amap
+    expect(seen.at(-1)).toMatchObject({ key: 'saved-secret', connector: {
+      catalogRevision: '2026-11-06.1', remote: { url: 'https://example.com/v2/mcp' }, auth: { name: 'ak' },
+    } })
+    expect(stored).toMatchObject({
+      catalogRevision: '2026-11-06.1', remote: { url: 'https://example.com/v2/mcp' }, auth: { name: 'ak' },
+    })
+    expect(view.catalogUpdate).toBeNull()
+    expect(await fixture.secrets.read('amap')).toEqual({ v: 1, apiKey: 'saved-secret' })
+  })
+
+  it('preserves old config, credentials and mounts when applying an update fails', async () => {
+    let accept = true
+    const fixture = await startFixture({ probeCandidate: async () => probe(accept, 'update rejected') })
+    await fixture.service.connectApiKey('amap', 'old-secret')
+    const originalFiber = fixture.context.fibers[0]
+    fixture.catalogValue.connectors[0].remote.url = 'https://example.com/v2/mcp'
+    fixture.catalogValue.revision = '2026-11-06.1'
+    await fixture.service.refreshCatalog()
+    accept = false
+
+    await expect(fixture.service.connectApiKey('amap', undefined, { applyCatalogUpdate: true })).rejects.toThrow('update rejected')
+    expect((await fixture.store.read()).connectors.amap).toMatchObject({
+      catalogRevision: '2026-11-03.2', remote: { url: 'https://example.com/mcp' },
+    })
+    expect(await fixture.secrets.read('amap')).toEqual({ v: 1, apiKey: 'old-secret' })
+    expect(fixture.context.fibers[0]).toBe(originalFiber)
+    expect(originalFiber.disposed).toBe(false)
+  })
+
+  it('allows replacing a Key after the connector is removed from the catalog', async () => {
+    const fixture = await startFixture()
+    await fixture.service.connectApiKey('amap', 'old-secret')
+    fixture.catalogValue.connectors = []
+    await fixture.service.refreshCatalog()
+
+    const view = await fixture.service.connectApiKey('amap', 'new-secret')
+    expect(view.catalogUpdate).toEqual({ kind: 'removed', fields: [] })
+    expect(view.remote.url).toBe('https://example.com/mcp')
+    expect(view.catalogRevision).toBe('2026-11-03.2')
+    expect(await fixture.secrets.read('amap')).toEqual({ v: 1, apiKey: 'new-secret' })
+  })
+
+  it('uses saved OAuth config for reauthorization and new config only when applying an update', async () => {
+    const attempts = []
+    const oauth = {
+      start: async (id, candidate, complete) => {
+        attempts.push({ candidate, complete })
+        return { attemptId: `attempt-${attempts.length}`, authorizationUrl: 'https://example.com/authorize' }
+      },
+    }
+    const fixture = await startFixture({ oauth })
+    await fixture.service.connectApiKey('amap', 'old-secret')
+    const oauthAuth = {
+      type: 'oauth', scope: 'old-scope', clientId: 'client-id',
+      callbackPath: '/oauth/callback/amap', portPolicy: 'random',
+    }
+    await fixture.store.update(draft => { draft.connectors.amap.auth = structuredClone(oauthAuth) })
+    fixture.catalogValue.connectors[0].auth = structuredClone(oauthAuth)
+    await fixture.service.refreshCatalog()
+    fixture.catalogValue.connectors[0].remote.url = 'https://example.com/v2/mcp'
+    fixture.catalogValue.connectors[0].auth.scope = 'new-scope'
+    fixture.catalogValue.revision = '2026-11-06.1'
+    await fixture.service.refreshCatalog()
+
+    await fixture.service.startOAuth('amap')
+    expect(attempts[0].candidate).toMatchObject({
+      catalogRevision: '2026-11-03.2', remote: { url: 'https://example.com/mcp' }, auth: { scope: 'old-scope' },
+    })
+    await fixture.service.startOAuth('amap', { applyCatalogUpdate: true })
+    expect(attempts[1].candidate).toMatchObject({
+      catalogRevision: '2026-11-06.1', remote: { url: 'https://example.com/v2/mcp' }, auth: { scope: 'new-scope' },
+    })
+
+    await attempts[1].complete({ v: 1, tokens: { access_token: 'access', expires_at: Date.now() + 60_000 } })
+    expect((await fixture.store.read()).connectors.amap).toMatchObject({
+      catalogRevision: '2026-11-06.1', remote: { url: 'https://example.com/v2/mcp' }, auth: { scope: 'new-scope' },
+    })
+  })
+
+  it('rejects applying a catalog update when there is no change', async () => {
+    const fixture = await startFixture()
+    await fixture.service.connectApiKey('amap', 'api-secret')
+
+    await expect(fixture.service.connectApiKey('amap', undefined, { applyCatalogUpdate: true }))
+      .rejects.toMatchObject({ status: 400 })
   })
 })
 
@@ -196,7 +318,9 @@ async function startFixture(options = {}) {
     secrets,
     mounts,
     gateway,
+    oauth: options.oauth,
     probeCandidate: options.probeCandidate ?? (async () => probe(true)),
+    probeOAuthCandidate: options.probeOAuthCandidate ?? (async () => probe(true)),
     probeMounted: options.probeMounted ?? (async id => ({ ...probe(true), tools: [`mcp__${id}__echo`] })),
     now: () => new Date('2026-11-03T10:30:00.000Z'),
   })

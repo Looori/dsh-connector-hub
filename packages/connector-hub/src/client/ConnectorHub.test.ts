@@ -6,7 +6,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ConnectorHub } from './ConnectorHub'
 import { zh, type LocaleKey } from './locales'
-import type { ConnectorHubApi } from './api'
+import type { CatalogResponse, ConnectorHubApi } from './api'
 import type { CatalogConnector, LocalizedText } from '../shared/catalog'
 import type { ConnectorView } from '../host/service'
 
@@ -81,7 +81,7 @@ function view(overrides: Partial<ConnectorView> = {}): ConnectorView {
     id: 'amap', enabled: true, status: 'connected', phase: 'active', generation: 1,
     mountedAt: '2026-11-03T08:00:00.000Z', tools: ['mcp__amap__maps_geo'], error: null, errorCode: null,
     catalogRevision: 'test.1', addedAt: '2026-11-03T08:00:00.000Z',
-    remote: amap.remote, auth: amap.auth, lastProbe: null,
+    remote: amap.remote, auth: amap.auth, lastProbe: null, catalogUpdate: null,
     ...overrides,
   }
 }
@@ -93,11 +93,15 @@ function oauthView(overrides: Partial<ConnectorView> = {}): ConnectorView {
   })
 }
 
-function apiFixture(connectors: ConnectorView[] = [], items: CatalogConnector[] = [amap, notion]) {
+function apiFixture(
+  connectors: ConnectorView[] = [],
+  items: CatalogConnector[] = [amap, notion],
+  updates: CatalogResponse['updates'] = [],
+) {
   const catalog = {
     catalog: { schemaVersion: 1 as const, revision: 'test.1', connectors: items },
     source: 'network' as const,
-    fetchedAt: '2026-11-03T08:00:00.000Z', stale: false, error: null, updates: [],
+    fetchedAt: '2026-11-03T08:00:00.000Z', stale: false, error: null, updates,
   }
   const api: ConnectorHubApi = {
     getCatalog: vi.fn().mockResolvedValue(catalog),
@@ -112,7 +116,7 @@ function apiFixture(connectors: ConnectorView[] = [], items: CatalogConnector[] 
       attemptId: '00000000-0000-4000-8000-000000000001', connectorId: 'notion', status: 'waiting', error: null,
     }),
     cancelOAuth: vi.fn().mockResolvedValue({ cancelled: true }),
-    probe: vi.fn().mockImplementation(async id => view({ id })),
+    probe: vi.fn().mockImplementation(async id => connectors.find(connector => connector.id === id) ?? view({ id })),
     remount: vi.fn().mockImplementation(async id => view({ id })),
     setEnabled: vi.fn().mockImplementation(async (id, enabled) => view({ id, enabled, status: enabled ? 'connected' : 'disabled' })),
     remove: vi.fn().mockResolvedValue({ removed: true }),
@@ -236,6 +240,91 @@ describe('connector hub browser UI', () => {
     await vi.advanceTimersByTimeAsync(60_000)
     expect(api.probe).not.toHaveBeenCalled()
     expect(api.listConnectors).toHaveBeenCalledTimes(2)
+  })
+
+  it('lists update names and shows changed and removed tags in Mine', async () => {
+    const changed = view({ catalogUpdate: { kind: 'changed', fields: ['remote.url'] } })
+    const removed = view({ id: 'old-connector', catalogUpdate: { kind: 'removed', fields: [] } })
+    const api = apiFixture([changed, removed], [amap, notion], [
+      { id: 'amap', kind: 'changed', fields: ['remote.url'] },
+      { id: 'old-connector', kind: 'removed', fields: [] },
+    ])
+    renderHub(api)
+
+    await screen.findByTestId('mine-row-amap')
+    expect(screen.getByText('以下连接器在目录中有更新：高德地图')).toBeTruthy()
+    expect(screen.getByRole('button', { name: '去我的页' })).toBeTruthy()
+    expect(within(screen.getByTestId('mine-row-amap')).getByText('有更新')).toBeTruthy()
+    expect(within(screen.getByTestId('mine-row-old-connector')).getByText('已下架')).toBeTruthy()
+  })
+
+  it('applies an API Key catalog update with the saved Key', async () => {
+    const updated = { ...amap, remote: { type: 'streamable-http' as const, url: 'https://mcp.amap.com/v2/mcp' } }
+    const initial = view({ catalogUpdate: { kind: 'changed', fields: ['remote.url'] } })
+    const api = apiFixture([initial], [updated], [{ id: 'amap', kind: 'changed', fields: ['remote.url'] }])
+    renderHub(api)
+    await screen.findByTestId('mine-row-amap')
+
+    await openActions()
+    await userEvent.click(screen.getByRole('menuitem', { name: '应用更新' }))
+    const dialog = screen.getByRole('dialog', { name: '应用目录更新' })
+    expect(dialog.textContent).toContain('https://mcp.amap.com/mcp → https://mcp.amap.com/v2/mcp')
+    await userEvent.click(within(dialog).getByRole('button', { name: '应用更新' }))
+
+    await waitFor(() => expect(api.connectApiKey).toHaveBeenCalledWith('amap', undefined, { applyCatalogUpdate: true }))
+    expect(await screen.findByText('目录更新已应用。')).toBeTruthy()
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('keeps a failed update open and retries with a replacement Key', async () => {
+    const updated = { ...amap, remote: { type: 'streamable-http' as const, url: 'https://mcp.amap.com/v2/mcp' } }
+    const initial = view({ catalogUpdate: { kind: 'changed', fields: ['remote.url'] } })
+    const api = apiFixture([initial], [updated], [{ id: 'amap', kind: 'changed', fields: ['remote.url'] }])
+    vi.mocked(api.connectApiKey).mockRejectedValueOnce(new Error('saved Key rejected')).mockResolvedValue(view())
+    renderHub(api)
+    await screen.findByTestId('mine-row-amap')
+
+    await openActions()
+    await userEvent.click(screen.getByRole('menuitem', { name: '应用更新' }))
+    await userEvent.click(screen.getByRole('button', { name: '应用更新' }))
+    expect(await screen.findByRole('alert')).toHaveProperty('textContent', 'saved Key rejected')
+    await userEvent.type(screen.getByLabelText('Web 服务 Key'), 'replacement')
+    await userEvent.click(screen.getByRole('button', { name: '应用更新' }))
+
+    await waitFor(() => expect(api.connectApiKey).toHaveBeenNthCalledWith(2, 'amap', 'replacement', { applyCatalogUpdate: true }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('passes the catalog update flag when an API Key connector becomes OAuth', async () => {
+    const updated = { ...amap, auth: { ...notion.auth, scope: 'new-scope' } }
+    const initial = view({ catalogUpdate: { kind: 'changed', fields: ['auth.type'] } })
+    const api = apiFixture([initial], [updated], [{ id: 'amap', kind: 'changed', fields: ['auth.type'] }])
+    renderHub(api, { openWindow: () => null })
+    await screen.findByTestId('mine-row-amap')
+
+    await openActions()
+    await userEvent.click(screen.getByRole('menuitem', { name: '应用更新' }))
+    await userEvent.click(screen.getByRole('button', { name: '应用更新' }))
+    await userEvent.click(screen.getByRole('button', { name: '前往授权' }))
+
+    await waitFor(() => expect(api.startOAuth).toHaveBeenCalledWith('amap', { applyCatalogUpdate: true }))
+  })
+
+  it('requires a new Key when an OAuth connector becomes API Key', async () => {
+    const updated = { ...notion, auth: amap.auth }
+    const initial = oauthView({ catalogUpdate: { kind: 'changed', fields: ['auth.type'] } })
+    const api = apiFixture([initial], [updated], [{ id: 'notion', kind: 'changed', fields: ['auth.type'] }])
+    renderHub(api)
+    await screen.findByTestId('mine-row-notion')
+
+    await openActions('Notion')
+    await userEvent.click(screen.getByRole('menuitem', { name: '应用更新' }))
+    const apply = screen.getByRole('button', { name: '应用更新' })
+    expect(apply).toHaveProperty('disabled', true)
+    await userEvent.type(screen.getByLabelText('Web 服务 Key'), 'new-key')
+    await userEvent.click(apply)
+
+    await waitFor(() => expect(api.connectApiKey).toHaveBeenCalledWith('notion', 'new-key', { applyCatalogUpdate: true }))
   })
 
   it('adds an API Key connector, closes the modal, refreshes, and shows a toast', async () => {

@@ -29,6 +29,12 @@ type KeyMode = 'add' | 'replace'
 interface AuthorizationTarget {
   connector: CatalogConnector
   mode: KeyMode
+  applyCatalogUpdate?: boolean
+}
+
+interface CatalogUpdateTarget {
+  connector: ConnectorView
+  catalogItem: CatalogConnector
 }
 
 export interface ConnectorHubProps {
@@ -64,6 +70,7 @@ export function ConnectorHub({
   const [menuId, setMenuId] = useState<string | null>(null)
   const [keyTarget, setKeyTarget] = useState<AuthorizationTarget | null>(null)
   const [oauthTarget, setOauthTarget] = useState<AuthorizationTarget | null>(null)
+  const [catalogUpdateTarget, setCatalogUpdateTarget] = useState<CatalogUpdateTarget | null>(null)
   const [removeTarget, setRemoveTarget] = useState<CatalogConnector | null>(null)
   const [toast, setToast] = useState<{ id: number, text: string } | null>(null)
   const toastSequence = useRef(0)
@@ -166,6 +173,7 @@ export function ConnectorHub({
   }
 
   const currentPage = page ?? 'discover'
+  const changedCatalogUpdates = catalog?.updates.filter(update => update.kind === 'changed') ?? []
   const tabItems: [
     { value: 'mine', label: string, id: string, panelId: string },
     { value: 'discover', label: string, id: string, panelId: string },
@@ -186,7 +194,15 @@ export function ConnectorHub({
           </Button>
         </div>
       )}
-      {catalog !== null && catalog.updates.length > 0 && <div style={styles.banner}>{t('catalogUpdates')}</div>}
+      {changedCatalogUpdates.length > 0 && (
+        <div style={styles.banner} role="status">
+          <span>{t('catalogUpdates').replace('{names}', changedCatalogUpdates.map(update => {
+            const item = catalog?.catalog.connectors.find(connector => connector.id === update.id)
+            return item ? resolveText(item.name) : update.id
+          }).join(', '))}</span>
+          <Button size="sm" variant="outline" onClick={() => setPage('mine')}>{t('goMine')}</Button>
+        </div>
+      )}
       {actionError !== null && <div role="alert" style={styles.error}>{actionError}</div>}
 
       {loading && <p style={styles.muted}>{t('loading')}</p>}
@@ -250,8 +266,13 @@ export function ConnectorHub({
                       () => api.setEnabled(connector.id, enabled),
                       enabled ? 'enabledToast' : 'disabledToast',
                     ) }}
-                    onReplaceKey={() => setKeyTarget({ connector: catalogItem ?? catalogItemFromView(connector), mode: 'replace' })}
-                    onReauthorize={() => setOauthTarget({ connector: catalogItem ?? catalogItemFromView(connector), mode: 'replace' })}
+                    onApplyCatalogUpdate={() => {
+                      if (catalogItem && connector.catalogUpdate?.kind === 'changed') {
+                        setCatalogUpdateTarget({ connector, catalogItem })
+                      }
+                    }}
+                    onReplaceKey={() => setKeyTarget({ connector: catalogItemFromView(connector), mode: 'replace' })}
+                    onReauthorize={() => setOauthTarget({ connector: catalogItemFromView(connector), mode: 'replace' })}
                     onRemove={() => setRemoveTarget(catalogItem ?? catalogItemFromView(connector))}
                   />
                 )
@@ -261,6 +282,28 @@ export function ConnectorHub({
         </section>
       )}
 
+      {catalogUpdateTarget !== null && (
+        <CatalogUpdateModal
+          t={t}
+          target={catalogUpdateTarget}
+          resolveText={resolveText}
+          api={api}
+          onClose={() => setCatalogUpdateTarget(null)}
+          onApplyOAuth={() => {
+            setCatalogUpdateTarget(null)
+            setOauthTarget({
+              connector: catalogUpdateTarget.catalogItem,
+              mode: 'replace',
+              applyCatalogUpdate: true,
+            })
+          }}
+          onApplied={async () => {
+            setCatalogUpdateTarget(null)
+            showToast(t('catalogUpdateApplied'))
+            await refresh()
+          }}
+        />
+      )}
       {keyTarget !== null && (
         <ApiKeyModal
           key={`${keyTarget.connector.id}:${keyTarget.mode}`}
@@ -283,6 +326,7 @@ export function ConnectorHub({
           pollMs={oauthPollMs}
           openWindow={openWindow}
           copyText={copyText}
+          applyCatalogUpdate={oauthTarget.applyCatalogUpdate}
           onClose={() => setOauthTarget(null)}
           onAuthorized={() => completeOAuth(oauthTarget)}
         />
@@ -364,6 +408,7 @@ interface MineRowProps {
   onProbe: () => void
   onRemount: () => void
   onSetEnabled: (enabled: boolean) => void
+  onApplyCatalogUpdate: () => void
   onReplaceKey: () => void
   onReauthorize: () => void
   onRemove: () => void
@@ -374,9 +419,11 @@ function MineRow(props: MineRowProps): ReactNode {
   const name = catalogItem ? resolveText(catalogItem.name) : connector.id
   const apiKey = connector.auth.type === 'api-key'
   const oauth = connector.auth.type === 'oauth'
+  const hasCatalogUpdate = connector.catalogUpdate?.kind === 'changed'
   const menuItems = [
     { id: 'probe', label: t('probe'), disabled: props.busy || !connector.enabled },
     { id: 'remount', label: t('remount'), disabled: props.busy || !connector.enabled },
+    ...(hasCatalogUpdate ? [{ id: 'apply-catalog-update', label: t('applyCatalogUpdate'), disabled: props.busy }] : []),
     ...(apiKey ? [{ id: 'replace-key', label: t('replaceKey'), disabled: props.busy }] : []),
     ...(oauth ? [{ id: 'reauthorize', label: t('reauthorize'), disabled: props.busy }] : []),
     { id: 'remove', label: t('remove'), danger: true, disabled: props.busy },
@@ -396,6 +443,8 @@ function MineRow(props: MineRowProps): ReactNode {
         collapsedContent={(
           <span style={styles.rowSummary}>
             <Status status={connector.status} t={t} />
+            {connector.catalogUpdate?.kind === 'changed' && <Tag tone="warning">{t('catalogUpdateAvailable')}</Tag>}
+            {connector.catalogUpdate?.kind === 'removed' && <Tag tone="neutral">{t('catalogRemoved')}</Tag>}
             {connector.account && <span style={styles.muted}>{connector.account}</span>}
             {connector.status === 'failed' && connector.enabled && (
               <Button size="sm" variant="outline" disabled={props.busy} onClick={event => {
@@ -420,6 +469,7 @@ function MineRow(props: MineRowProps): ReactNode {
                 props.onMenuChange(false)
                 if (id === 'probe') props.onProbe()
                 if (id === 'remount') props.onRemount()
+                if (id === 'apply-catalog-update') props.onApplyCatalogUpdate()
                 if (id === 'replace-key') props.onReplaceKey()
                 if (id === 'reauthorize') props.onReauthorize()
                 if (id === 'remove') props.onRemove()
@@ -468,6 +518,129 @@ function MineRow(props: MineRowProps): ReactNode {
   )
 }
 
+interface CatalogUpdateModalProps {
+  t: Translate
+  target: CatalogUpdateTarget
+  resolveText: (text: LocalizedText) => string
+  api: ConnectorHubApi
+  onClose: () => void
+  onApplyOAuth: () => void
+  onApplied: () => Promise<void>
+}
+
+function CatalogUpdateModal({
+  t, target, resolveText, api, onClose, onApplyOAuth, onApplied,
+}: CatalogUpdateModalProps): ReactNode {
+  const [key, setKey] = useState('')
+  const { connector, catalogItem } = target
+  const [keyRequired, setKeyRequired] = useState(catalogItem.auth.type === 'api-key' && connector.auth.type !== 'api-key')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const fields = connector.catalogUpdate?.fields ?? []
+  const apiKeyAuth = catalogItem.auth.type === 'api-key' ? catalogItem.auth : null
+
+  async function apply(): Promise<void> {
+    if (catalogItem.auth.type === 'oauth') {
+      onApplyOAuth()
+      return
+    }
+    setBusy(true)
+    setError(null)
+    try {
+      await api.connectApiKey(connector.id, keyRequired ? key : undefined, { applyCatalogUpdate: true })
+      await onApplied()
+    } catch (cause) {
+      setKeyRequired(true)
+      setError(errorMessage(cause))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Modal
+      open
+      onClose={() => { if (!busy) onClose() }}
+      title={t('applyCatalogUpdateTitle')}
+      description={resolveText(catalogItem.name)}
+      closeLabel={t('close')}
+      footer={(
+        <div style={styles.modalFooter}>
+          <Button variant="ghost" disabled={busy} onClick={onClose}>{t('cancel')}</Button>
+          <Button variant="primary" disabled={busy || apiKeyAuth !== null && keyRequired && key.length === 0} onClick={() => { void apply() }}>
+            {busy ? t('applyingCatalogUpdate') : t('applyCatalogUpdate')}
+          </Button>
+        </div>
+      )}
+    >
+      <div style={styles.form}>
+        <dl style={styles.details}>
+          {fields.map(field => (
+            <div key={field} style={styles.updateField}>
+              <dt>{catalogFieldLabel(field, t)}</dt>
+              <dd>
+                {formatCatalogValue(catalogFieldValue(connector, field))}
+                {' → '}
+                {formatCatalogValue(catalogFieldValue(catalogItem, field))}
+              </dd>
+            </div>
+          ))}
+        </dl>
+        {keyRequired && apiKeyAuth && (
+          <>
+            <label htmlFor="connector-hub-update-api-key" style={styles.label}>{resolveText(apiKeyAuth.label)}</label>
+            <Input
+              id="connector-hub-update-api-key"
+              data-modal-autofocus
+              type="password"
+              value={key}
+              disabled={busy}
+              autoComplete="off"
+              spellCheck={false}
+              placeholder={t('keyPlaceholder')}
+              onChange={event => setKey(event.target.value)}
+            />
+            <a href={apiKeyAuth.helpUrl} target="_blank" rel="noreferrer">{t('howToGet')}</a>
+          </>
+        )}
+        {error !== null && <div role="alert" style={styles.error}>{error}</div>}
+      </div>
+    </Modal>
+  )
+}
+
+function catalogFieldValue(source: ConnectorView | CatalogConnector, field: string): unknown {
+  return field.split('.').reduce<unknown>((value, key) => (
+    value !== null && typeof value === 'object' ? (value as Record<string, unknown>)[key] : undefined
+  ), source)
+}
+
+function formatCatalogValue(value: unknown): string {
+  if (value === undefined) return '—'
+  if (typeof value === 'string') return value
+  return JSON.stringify(value) ?? String(value)
+}
+
+function catalogFieldLabel(field: string, t: Translate): string {
+  const labels: Record<string, LocaleKey> = {
+    'remote.type': 'remoteType',
+    'remote.url': 'serviceAddress',
+    'auth.type': 'authType',
+    'auth.in': 'authLocation',
+    'auth.name': 'authParameterName',
+    'auth.helpUrl': 'howToGet',
+    'auth.scope': 'oauthScope',
+    'auth.clientId': 'oauthClientIdentity',
+    'auth.clientMetadataUrl': 'oauthClientIdentity',
+    'auth.callbackPath': 'oauthCallbackPath',
+    'auth.portPolicy': 'oauthPortPolicy',
+    'auth.fixedPort': 'oauthFixedPort',
+    'auth.authorizationParams': 'oauthAuthorizationParams',
+  }
+  const key = labels[field]
+  return key ? t(key) : field
+}
+
 type OAuthPhase = 'idle' | 'starting' | 'waiting' | 'cancelling' | 'failed' | 'success'
 
 interface OAuthModalProps {
@@ -479,12 +652,13 @@ interface OAuthModalProps {
   pollMs: number
   openWindow?: (url: string, target?: string, features?: string) => Window | null
   copyText?: (text: string) => Promise<void>
+  applyCatalogUpdate?: boolean
   onClose: () => void
   onAuthorized: () => Promise<string | null>
 }
 
 function OAuthModal({
-  t, connector, mode, resolveText, api, pollMs, openWindow, copyText, onClose, onAuthorized,
+  t, connector, mode, resolveText, api, pollMs, openWindow, copyText, applyCatalogUpdate, onClose, onAuthorized,
 }: OAuthModalProps): ReactNode {
   const [phase, setPhase] = useState<OAuthPhase>('idle')
   const [attemptId, setAttemptId] = useState<string | null>(null)
@@ -556,7 +730,9 @@ function OAuthModal({
       popup.current = null
     }
     try {
-      const started = await api.startOAuth(connector.id)
+      const started = applyCatalogUpdate
+        ? await api.startOAuth(connector.id, { applyCatalogUpdate: true })
+        : await api.startOAuth(connector.id)
       setAttemptId(started.attemptId)
       setAuthorizationUrl(started.authorizationUrl)
       if (popup.current && !popup.current.closed) {
@@ -841,6 +1017,7 @@ const styles = {
   rowSummary: { display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
   rowActions: { display: 'inline-flex', alignItems: 'center', gap: 6 },
   details: { margin: '8px 0 12px', display: 'grid', gridTemplateColumns: 'max-content minmax(0, 1fr)', gap: '8px 16px', color: 'var(--dsw-alias-label-secondary)', overflowWrap: 'anywhere' },
+  updateField: { display: 'contents' },
   tool: { display: 'inline-block', margin: '0 6px 4px 0' },
   empty: { minHeight: 220, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, color: 'var(--dsw-alias-label-secondary)' },
   muted: { color: 'var(--dsw-alias-label-secondary)', margin: 0 },

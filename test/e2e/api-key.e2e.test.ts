@@ -108,6 +108,33 @@ it('runs the API Key lifecycle through real DSH routes and the browser UI', { ti
     expect(storedConfig).not.toContain(TEST_API_KEY)
     expect(await readFile(journal, 'utf8')).toContain(`set dsh-connector-hub ${CONNECTOR_ID}`)
 
+    fixture.catalog.connectors[0].remote.url = `${fixture.origin}/v2/mcp`
+    fixture.catalog.revision = 'e2e.2'
+    const updates = await request('/api/connector-hub/catalog-refresh', 'POST')
+    expect(updates.body.updates).toEqual([{ id: CONNECTOR_ID, kind: 'changed', fields: ['remote.url'] }])
+
+    const beforeReplace = fixture.requests.length
+    const replaced = await request('/api/connector-hub/api-key-connect', 'POST', { id: CONNECTOR_ID, key: TEST_API_KEY })
+    expect(replaced.status).toBe(200)
+    expect(replaced.body).toMatchObject({
+      catalogRevision: 'e2e.1', remote: { url: `${fixture.origin}/mcp` },
+      catalogUpdate: { kind: 'changed', fields: ['remote.url'] },
+    })
+    expect(fixture.requests.length).toBeGreaterThan(beforeReplace)
+    expect(fixture.requests.slice(beforeReplace).every(path => path === '/mcp')).toBe(true)
+
+    const beforeApply = fixture.requests.length
+    const applied = await request('/api/connector-hub/api-key-connect', 'POST', { id: CONNECTOR_ID, applyCatalogUpdate: true })
+    expect(applied.status).toBe(200)
+    expect(applied.body).toMatchObject({
+      catalogRevision: 'e2e.2', remote: { url: `${fixture.origin}/v2/mcp` }, catalogUpdate: null,
+    })
+    expect(fixture.requests.length).toBeGreaterThan(beforeApply)
+    expect(fixture.requests.slice(beforeApply).every(path => path === '/v2/mcp')).toBe(true)
+    expect(JSON.parse(await readFile(configPath, 'utf8')).connectors[CONNECTOR_ID]).toMatchObject({
+      catalogRevision: 'e2e.2', remote: { url: `${fixture.origin}/v2/mcp` },
+    })
+
     const probed = await request('/api/connector-hub/probe', 'POST', { id: CONNECTOR_ID })
     expect(probed.status).toBe(200)
     expect(probed.body.lastProbe).toMatchObject({ ok: true })

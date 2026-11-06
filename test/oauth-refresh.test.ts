@@ -204,7 +204,13 @@ async function startServiceFixture(server: OAuthFixtureServer, initialSecret: Re
     gateway,
     oauthTokens: refresher,
     reauthRequired,
-    catalog: {} as never,
+    catalog: {
+      load: async () => ({
+        catalog: { schemaVersion: 1, revision: 'test', connectors: [] },
+        source: 'snapshot', fetchedAt: NOW, stale: false, error: null,
+      }),
+      snapshotResult: () => undefined,
+    } as never,
   })
   await service.start()
   return { home, store, secrets, context, mounts, reauthRequired, refresher, service }
