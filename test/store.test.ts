@@ -35,6 +35,21 @@ describe('connector config parsing and migration', () => {
     )
   })
 
+  it('accepts legacy and templated API Key auth but rejects malformed templates', () => {
+    const legacy = configWith('amap')
+    expect(parseConnectorConfig(legacy)).toEqual(legacy)
+
+    const templated = configWith('amap')
+    templated.connectors.amap.auth.valueTemplate = 'Bearer ${value}'
+    expect(parseConnectorConfig(templated)).toEqual(templated)
+
+    for (const valueTemplate of ['Bearer key', '${value} ${value}', 42]) {
+      const invalid = configWith('amap')
+      invalid.connectors.amap.auth.valueTemplate = valueTemplate
+      expect(() => parseConnectorConfig(invalid)).toThrow('exactly one ${value} placeholder')
+    }
+  })
+
   it('rejects malformed entries and credentials without echoing secret values', () => {
     const malformed = configWith('notion')
     malformed.connectors.notion.enabled = 'yes'

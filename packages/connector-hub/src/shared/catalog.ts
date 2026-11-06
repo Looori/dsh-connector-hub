@@ -29,6 +29,7 @@ export interface ApiKeyAuth {
   type: 'api-key'
   in: 'header' | 'query'
   name: string
+  valueTemplate?: string
   label: LocalizedText
   helpUrl: string
 }

@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { CatalogService, parseCatalog } from '../packages/connector-hub/src/host/catalog'
+import { CatalogService, DEFAULT_CATALOG_URL, parseCatalog } from '../packages/connector-hub/src/host/catalog'
 
 const temporaryPaths = []
 
@@ -11,6 +11,17 @@ afterEach(async () => {
 })
 
 describe('CatalogService', () => {
+  it('uses the v2 channel and an independent cache by default', async () => {
+    const home = await temporaryHome()
+    const fetchImpl = vi.fn(async () => Response.json(catalog()))
+    const service = new CatalogService({ dshHome: home, snapshot: catalog('snapshot'), fetchImpl })
+
+    expect(DEFAULT_CATALOG_URL).toBe('https://looori.github.io/dsh-connector-hub/catalog/v2/index.json')
+    expect(service.cachePath).toBe(join(home, 'connector-hub', 'cache', 'catalog-v2.json'))
+    await service.load()
+    expect(fetchImpl).toHaveBeenCalledWith(DEFAULT_CATALOG_URL, expect.anything())
+  })
+
   it('fetches and validates the network catalog, then reuses a fresh persistent cache', async () => {
     const home = await temporaryHome()
     const fetchImpl = vi.fn(async () => Response.json(catalog(), { headers: { etag: 'rev-1' } }))

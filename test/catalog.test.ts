@@ -50,6 +50,20 @@ describe('initial connector catalog', () => {
     })
   })
 
+  it('requires an API Key value template to contain exactly one value placeholder', () => {
+    const valid = changedCatalog(value => {
+      value.connectors[4].auth.valueTemplate = 'Bearer ${value}'
+    })
+    expect(validateCatalog(valid)).toEqual([])
+
+    for (const template of ['Bearer key', 'Bearer ${value} ${value}', 42]) {
+      const invalid = changedCatalog(value => {
+        value.connectors[4].auth.valueTemplate = template
+      })
+      expect(validateCatalog(invalid).length).toBeGreaterThan(0)
+    }
+  })
+
   it('allows unknown non-sensitive fields for forward compatibility', () => {
     const value = changedCatalog(value => {
       value.connectors[0].futureField = { enabled: true }

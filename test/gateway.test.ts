@@ -74,6 +74,31 @@ describe('CredentialGateway', () => {
     if (mode === 'none') expect(request.headers.authorization).toBeUndefined()
   })
 
+  it.each([
+    { apiKey: 'api-secret', expected: 'Bearer api-secret' },
+    { apiKey: 'Bearer api-secret', expected: 'Bearer api-secret' },
+  ])('formats a Bearer header without duplicating an existing prefix', async ({ apiKey, expected }) => {
+    const fixture = await startFixture('header', { valueTemplate: 'Bearer ${value}', apiKey })
+    const endpoint = fixture.gateway.endpoint('test')
+    await fetch(endpoint.url, {
+      method: 'POST', headers: endpoint.headers, body: '{}',
+    })
+
+    expect(fixture.requests[0].headers.ak).toBe(expected)
+  })
+
+  it('applies a value template to only the configured query credential', async () => {
+    const fixture = await startFixture('query', { valueTemplate: 'Key ${value}' })
+    const endpoint = fixture.gateway.endpoint('test')
+    await fetch(endpoint.url, {
+      method: 'POST', headers: endpoint.headers, body: '{}',
+    })
+
+    const url = new URL(fixture.requests[0].url, 'http://upstream.local')
+    expect(url.searchParams.get('key')).toBe('Key api-secret')
+    expect(url.searchParams.get('org')).toBe('1')
+  })
+
   it('streams SSE responses in chunks instead of buffering the complete response', async () => {
     const fixture = await startFixture('none')
     const endpoint = fixture.gateway.endpoint('test')
@@ -229,7 +254,10 @@ async function startFixture(mode, options = {}) {
   const connector = {
     catalogRevision: '2026-11-03.1',
     remote: { type: 'streamable-http', url: remoteUrl },
-    auth: authConfig(mode),
+    auth: {
+      ...authConfig(mode),
+      ...(options.valueTemplate === undefined ? {} : { valueTemplate: options.valueTemplate }),
+    },
     enabled: true,
     addedAt: '2026-11-03T08:00:00.000Z',
   }
@@ -240,7 +268,7 @@ async function startFixture(mode, options = {}) {
       tokens: { access_token: 'oauth-access', refresh_token: 'oauth-refresh', expires_at: Date.now() + 60_000 },
     })
   } else if (mode === 'header' || mode === 'query') {
-    await secrets.write('test', { v: 1, apiKey: 'api-secret' })
+    await secrets.write('test', { v: 1, apiKey: options.apiKey ?? 'api-secret' })
   }
   const gateway = await CredentialGateway.start({
     getConnector: id => id === 'test' ? connector : undefined,

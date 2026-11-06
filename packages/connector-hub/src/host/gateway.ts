@@ -176,8 +176,11 @@ export class CredentialGateway {
       return credential
     }
     if (!isApiKeySecret(secret)) throw new GatewayHttpError(401, 'API Key credential is invalid')
-    if (auth.in === 'header') headers.set(auth.name, secret.apiKey)
-    else upstream.searchParams.set(auth.name, secret.apiKey)
+    const value = auth.valueTemplate === 'Bearer ${value}' && secret.apiKey.startsWith('Bearer ')
+      ? secret.apiKey
+      : auth.valueTemplate?.replace('${value}', secret.apiKey) ?? secret.apiKey
+    if (auth.in === 'header') headers.set(auth.name, value)
+    else upstream.searchParams.set(auth.name, value)
     return undefined
   }
 }

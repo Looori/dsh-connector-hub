@@ -50,10 +50,13 @@ describe('catalog build', () => {
 })
 
 describe('catalog publishing', () => {
-  it('writes only the versioned JSON into a site checkout', async () => {
+  it('writes the v2 JSON by default without replacing v1', async () => {
     const fixture = await makeFixture()
     const site = await temporaryDirectory('connector-hub-site-')
     await mkdir(resolve(site, '.git'))
+    const v1Path = resolve(site, 'dsh-connector-hub/catalog/v1/index.json')
+    await mkdir(resolve(site, 'dsh-connector-hub/catalog/v1'), { recursive: true })
+    await writeFile(v1Path, 'existing-v1\n', 'utf8')
 
     const result = await publishCatalog({
       siteRoot: site,
@@ -62,9 +65,30 @@ describe('catalog publishing', () => {
     })
     const published = JSON.parse(await readFile(result.outputPath, 'utf8'))
     expect(validateCatalog(published)).toEqual([])
-    expect(result.outputPath).toBe(resolve(site, 'dsh-connector-hub/catalog/v1/index.json'))
+    expect(result.outputPath).toBe(resolve(site, 'dsh-connector-hub/catalog/v2/index.json'))
     expect(result.revision).toBe('2026-11-03.2')
     expect(result.ids).toEqual(['notion', 'xmind-cn', 'amap', 'baidu-map', 'tencent-docs'])
+    expect(await readFile(v1Path, 'utf8')).toBe('existing-v1\n')
+  })
+
+  it('supports an explicitly selected v1 output and rejects unknown channels', async () => {
+    const fixture = await makeFixture()
+    const site = await temporaryDirectory('connector-hub-site-v1-')
+    await mkdir(resolve(site, '.git'))
+
+    const result = await publishCatalog({
+      siteRoot: site,
+      sourceRoot: fixture.source,
+      snapshotPath: fixture.snapshot,
+      channel: 'v1',
+    })
+    expect(result.outputPath).toBe(resolve(site, 'dsh-connector-hub/catalog/v1/index.json'))
+    await expect(publishCatalog({
+      siteRoot: site,
+      sourceRoot: fixture.source,
+      snapshotPath: fixture.snapshot,
+      channel: 'v3',
+    })).rejects.toThrow('Unsupported catalog channel')
   })
 
   it('refuses to write when the target is not a site checkout', async () => {

@@ -87,6 +87,10 @@
               "type": "string",
               "minLength": 1
             },
+            "valueTemplate": {
+              "type": "string",
+              "pattern": "^(?:[^$]|\\$(?!\\{value\\}))*\\$\\{value\\}(?:[^$]|\\$(?!\\{value\\}))*$"
+            },
             "label": { "$ref": "#/$defs/localizedText" },
             "helpUrl": {
               "type": "string",

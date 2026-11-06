@@ -83,6 +83,11 @@ export function parseConnectorConfig(
     if (!isRecord(connector.auth) || !['oauth', 'api-key', 'none'].includes(String(connector.auth.type))) {
       throw invalid(`${path}.auth has an unsupported type`)
     }
+    if (connector.auth.type === 'api-key' && Object.hasOwn(connector.auth, 'valueTemplate')
+      && (typeof connector.auth.valueTemplate !== 'string'
+        || connector.auth.valueTemplate.split('${value}').length !== 2)) {
+      throw invalid(`${path}.auth.valueTemplate must contain exactly one \${value} placeholder`)
+    }
     assertNoSecrets(connector, path)
   }
   return config as unknown as ConnectorConfig

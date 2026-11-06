@@ -6,7 +6,7 @@ import type { Catalog, CatalogConnector, LocalizedText } from '../shared/catalog
 import { CONNECTOR_ID_PATTERN, parseConnectorConfig } from '../shared/config'
 import { safeErrorMessage } from './redact'
 
-export const DEFAULT_CATALOG_URL = 'https://looori.github.io/dsh-connector-hub/catalog/v1/index.json'
+export const DEFAULT_CATALOG_URL = 'https://looori.github.io/dsh-connector-hub/catalog/v2/index.json'
 export const CATALOG_MAX_AGE_MS = 24 * 60 * 60 * 1000
 
 interface CacheEntry {
@@ -45,7 +45,7 @@ export class CatalogService {
   private inFlight: Promise<CatalogResult> | undefined
 
   constructor(options: CatalogServiceOptions) {
-    this.cachePath = resolve(options.dshHome, 'connector-hub', 'cache', 'catalog.json')
+    this.cachePath = resolve(options.dshHome, 'connector-hub', 'cache', 'catalog-v2.json')
     this.catalogUrl = options.catalogUrl ?? DEFAULT_CATALOG_URL
     assertCatalogUrl(this.catalogUrl)
     this.snapshot = parseCatalog(options.snapshot ?? bundledSnapshot)
@@ -158,6 +158,8 @@ function validateAuth(value: unknown, id: string): void {
   if (value.type === 'none') return
   if (value.type === 'api-key') {
     if (!['header', 'query'].includes(String(value.in)) || typeof value.name !== 'string' || !value.name
+      || Object.hasOwn(value, 'valueTemplate') && (typeof value.valueTemplate !== 'string'
+        || value.valueTemplate.split('${value}').length !== 2)
       || !localized(value.label) || typeof value.helpUrl !== 'string' || !httpsUrl(value.helpUrl)) {
       throw new Error(`Catalog connector ${id} has invalid API Key auth`)
     }
