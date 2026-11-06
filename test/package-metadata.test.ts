@@ -7,7 +7,7 @@ const pkg = JSON.parse(readFileSync(packageUrl, 'utf8'))
 describe('connector hub package metadata', () => {
   it('exposes the Host and browser entry points required by DSH', () => {
     expect(pkg.name).toBe('dsh-connector-hub')
-    expect(pkg.version).toBe('0.1.0')
+    expect(pkg.version).toBe('0.1.1')
     expect(pkg.repository).toEqual({
       type: 'git',
       url: 'git+https://github.com/Looori/dsh-connector-hub.git',
