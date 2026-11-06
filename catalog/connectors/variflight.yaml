@@ -1,0 +1,23 @@
+id: variflight
+name:
+  zh: 飞常准
+  en: VariFlight
+description:
+  zh: 查询航班动态、机场与航司信息，分析已授权的个人行程，并获取票价和出行规划信息。
+  en: Check flight status, airport and airline information, analyze authorized personal trips, and access fare and travel-planning information.
+icon: data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTQiIGZpbGw9IiMzNDZkZjEiLz48dGV4dCB4PSIzMiIgeT0iNDIiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtZmFtaWx5PSJBcmlhbCxzYW5zLXNlcmlmIiBmb250LXNpemU9IjM2IiBmb250LXdlaWdodD0iNzAwIiBmaWxsPSJ3aGl0ZSI+VjwvdGV4dD48L3N2Zz4=
+homepage: https://cmcp.variflight.com/
+publisher: 飞常准
+official: true
+remote:
+  type: streamable-http
+  url: https://c-gw.variflight.com/chat_message/mcp/api
+auth:
+  type: api-key
+  in: header
+  name: Authorization
+  valueTemplate: Bearer ${value}
+  label:
+    zh: MCP Key
+    en: MCP key
+  helpUrl: https://cmcp.variflight.com/

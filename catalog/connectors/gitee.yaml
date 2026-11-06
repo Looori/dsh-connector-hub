@@ -1,0 +1,23 @@
+id: gitee
+name:
+  zh: Gitee（码云）
+  en: Gitee
+description:
+  zh: 查询和管理 Gitee 仓库、代码文件、Issue、Pull Request 与评论，辅助代码协作。
+  en: Access Gitee repositories and files, and manage issues, pull requests and comments for development collaboration.
+icon: data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTQiIGZpbGw9IiNjNzFkMjMiLz48dGV4dCB4PSIzMiIgeT0iNDIiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtZmFtaWx5PSJBcmlhbCxzYW5zLXNlcmlmIiBmb250LXNpemU9IjM2IiBmb250LXdlaWdodD0iNzAwIiBmaWxsPSJ3aGl0ZSI+RzwvdGV4dD48L3N2Zz4=
+homepage: https://gitee.com/
+publisher: Gitee
+official: true
+remote:
+  type: streamable-http
+  url: https://api.gitee.com/mcp
+auth:
+  type: api-key
+  in: header
+  name: Authorization
+  valueTemplate: Bearer ${value}
+  label:
+    zh: 私人令牌
+    en: Personal access token
+  helpUrl: https://gitee.com/profile/personal_access_tokens

@@ -1,0 +1,23 @@
+id: flight-master
+name:
+  zh: 航班管家（航空数据）
+  en: Flight Master Aviation Data
+description:
+  zh: 查询航班动态、航线、机上舒适度、延误预测、机场天气、飞行轨迹及机场和航司运行统计。
+  en: Check flight status, routes, onboard amenities, delay forecasts, airport weather, flight tracks and airport or airline operating statistics.
+icon: data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTQiIGZpbGw9IiMxNDg1YzAiLz48dGV4dCB4PSIzMiIgeT0iNDIiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtZmFtaWx5PSJBcmlhbCxzYW5zLXNlcmlmIiBmb250LXNpemU9IjM2IiBmb250LXdlaWdodD0iNzAwIiBmaWxsPSJ3aGl0ZSI+RjwvdGV4dD48L3N2Zz4=
+homepage: https://dast.133.cn/mcp/
+publisher: 航班管家
+official: true
+remote:
+  type: streamable-http
+  url: https://fly.huoli.com/mcp/dast_mcp
+auth:
+  type: api-key
+  in: header
+  name: Authorization
+  valueTemplate: Bearer ${value}
+  label:
+    zh: API Key
+    en: API key
+  helpUrl: https://dast.133.cn/ucenter/mcp-apikey

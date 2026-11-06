@@ -1,0 +1,22 @@
+id: didi
+name:
+  zh: 滴滴出行
+  en: DiDi
+description:
+  zh: 查询地点与路线、预估打车费用，并按账号开通权限处理叫车、订单跟踪和取消等出行需求。
+  en: Look up places and routes, estimate ride fares, and handle ride booking, tracking and cancellation according to the account's enabled permissions.
+icon: data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTQiIGZpbGw9IiNmZjcwNDEiLz48dGV4dCB4PSIzMiIgeT0iNDIiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtZmFtaWx5PSJBcmlhbCxzYW5zLXNlcmlmIiBmb250LXNpemU9IjM2IiBmb250LXdlaWdodD0iNzAwIiBmaWxsPSJ3aGl0ZSI+RDwvdGV4dD48L3N2Zz4=
+homepage: https://mcp.didichuxing.com/
+publisher: 滴滴出行
+official: true
+remote:
+  type: streamable-http
+  url: https://mcp.didichuxing.com/mcp-servers
+auth:
+  type: api-key
+  in: query
+  name: key
+  label:
+    zh: MCP Key
+    en: MCP key
+  helpUrl: https://mcp.didichuxing.com/

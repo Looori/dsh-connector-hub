@@ -1,0 +1,23 @@
+id: wind-stock
+name:
+  zh: 万得股票数据
+  en: Wind Stock Data
+description:
+  zh: 查询股票行情、公司基本面、估值和相关金融数据，辅助股票研究与分析。
+  en: Retrieve stock prices, company fundamentals, valuations and related financial data for equity research and analysis.
+icon: data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTQiIGZpbGw9IiNjNjI4MjgiLz48dGV4dCB4PSIzMiIgeT0iNDIiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtZmFtaWx5PSJBcmlhbCxzYW5zLXNlcmlmIiBmb250LXNpemU9IjM2IiBmb250LXdlaWdodD0iNzAwIiBmaWxsPSJ3aGl0ZSI+VzwvdGV4dD48L3N2Zz4=
+homepage: https://market.windalice.com/
+publisher: 万得
+official: true
+remote:
+  type: streamable-http
+  url: https://mcp.wind.com.cn/vserver_stock_data/mcp/
+auth:
+  type: api-key
+  in: header
+  name: Authorization
+  valueTemplate: Bearer ${value}
+  label:
+    zh: API Key
+    en: API key
+  helpUrl: https://market.windalice.com/#/user/overview

@@ -1,0 +1,23 @@
+id: qcc
+name:
+  zh: 企查查
+  en: Qichacha
+description:
+  zh: 查询企业工商信息、股东与关联企业等企业数据，帮助开展企业调研和背景核查。
+  en: Look up company profiles, shareholders and related businesses to support company research and background checks.
+icon: data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTQiIGZpbGw9IiMxNjc3ZmYiLz48dGV4dCB4PSIzMiIgeT0iNDIiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtZmFtaWx5PSJBcmlhbCxzYW5zLXNlcmlmIiBmb250LXNpemU9IjM2IiBmb250LXdlaWdodD0iNzAwIiBmaWxsPSJ3aGl0ZSI+UTwvdGV4dD48L3N2Zz4=
+homepage: https://agent.qcc.com/
+publisher: 企查查
+official: true
+remote:
+  type: streamable-http
+  url: https://agent.qcc.com/mcp/company/stream
+auth:
+  type: api-key
+  in: header
+  name: Authorization
+  valueTemplate: Bearer ${value}
+  label:
+    zh: API Key
+    en: API key
+  helpUrl: https://agent.qcc.com/profile/api-key

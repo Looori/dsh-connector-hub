@@ -16,7 +16,7 @@ afterEach(async () => {
 })
 
 describe('catalog build', () => {
-  it('builds a deterministic, valid five-entry package snapshot', async () => {
+  it('builds a deterministic, valid thirteen-entry package snapshot', async () => {
     const first = await buildCatalog()
     const second = await buildCatalog()
     expect(second.json).toBe(first.json)
@@ -24,6 +24,7 @@ describe('catalog build', () => {
     expect(validateCatalog(first.catalog)).toEqual([])
     expect(first.catalog.connectors.map(connector => connector.id)).toEqual([
       'notion', 'xmind-cn', 'amap', 'baidu-map', 'tencent-docs',
+      'qcc', 'github', 'gitee', 'tencent-maps', 'flight-master', 'didi', 'wind-stock', 'variflight',
     ])
     expect(first.json.endsWith('\n')).toBe(true)
   })
@@ -66,8 +67,11 @@ describe('catalog publishing', () => {
     const published = JSON.parse(await readFile(result.outputPath, 'utf8'))
     expect(validateCatalog(published)).toEqual([])
     expect(result.outputPath).toBe(resolve(site, 'dsh-connector-hub/catalog/v2/index.json'))
-    expect(result.revision).toBe('2026-11-03.2')
-    expect(result.ids).toEqual(['notion', 'xmind-cn', 'amap', 'baidu-map', 'tencent-docs'])
+    expect(result.revision).toBe('2026-11-06.1')
+    expect(result.ids).toEqual([
+      'notion', 'xmind-cn', 'amap', 'baidu-map', 'tencent-docs',
+      'qcc', 'github', 'gitee', 'tencent-maps', 'flight-master', 'didi', 'wind-stock', 'variflight',
+    ])
     expect(await readFile(v1Path, 'utf8')).toBe('existing-v1\n')
   })
 
@@ -107,7 +111,10 @@ async function makeFixture() {
   const source = resolve(root, 'catalog')
   await mkdir(resolve(source, 'connectors'), { recursive: true })
   await writeFile(resolve(source, 'index.yaml'), await readFile(resolve(sourceRoot, 'index.yaml'), 'utf8'))
-  for (const id of ['notion', 'xmind-cn', 'amap', 'baidu-map', 'tencent-docs']) {
+  for (const id of [
+    'notion', 'xmind-cn', 'amap', 'baidu-map', 'tencent-docs',
+    'qcc', 'github', 'gitee', 'tencent-maps', 'flight-master', 'didi', 'wind-stock', 'variflight',
+  ]) {
     await writeFile(
       resolve(source, `connectors/${id}.yaml`),
       await readFile(resolve(sourceRoot, `connectors/${id}.yaml`), 'utf8'),

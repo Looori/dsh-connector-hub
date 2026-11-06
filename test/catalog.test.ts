@@ -18,12 +18,13 @@ function changedCatalog(change) {
 }
 
 describe('initial connector catalog', () => {
-  it('contains exactly the five configured connectors in display order', () => {
+  it('contains exactly the thirteen configured connectors in display order', () => {
     expect(validateCatalog(catalog)).toEqual([])
     expect(catalog.schemaVersion).toBe(1)
-    expect(catalog.revision).toBe('2026-11-03.2')
+    expect(catalog.revision).toBe('2026-11-06.1')
     expect(catalog.connectors.map(connector => connector.id)).toEqual([
       'notion', 'xmind-cn', 'amap', 'baidu-map', 'tencent-docs',
+      'qcc', 'github', 'gitee', 'tencent-maps', 'flight-master', 'didi', 'wind-stock', 'variflight',
     ])
   })
 
@@ -48,6 +49,29 @@ describe('initial connector catalog', () => {
       remote: { type: 'streamable-http', url: 'https://docs.qq.com/openapi/mcp' },
       auth: { type: 'api-key', in: 'header', name: 'Authorization' },
     })
+  })
+
+  it('configures the eight new connectors with their official endpoints and credential settings', () => {
+    const expected = {
+      qcc: ['https://agent.qcc.com/mcp/company/stream', 'header', 'Authorization', 'Bearer ${value}', 'https://agent.qcc.com/profile/api-key'],
+      github: ['https://api.githubcopilot.com/mcp/', 'header', 'Authorization', 'Bearer ${value}', 'https://github.com/settings/personal-access-tokens/new'],
+      gitee: ['https://api.gitee.com/mcp', 'header', 'Authorization', 'Bearer ${value}', 'https://gitee.com/profile/personal_access_tokens'],
+      'tencent-maps': ['https://mcp.map.qq.com/mcp?format=0', 'query', 'key', undefined, 'https://lbs.qq.com/dev/console/application/mine'],
+      'flight-master': ['https://fly.huoli.com/mcp/dast_mcp', 'header', 'Authorization', 'Bearer ${value}', 'https://dast.133.cn/ucenter/mcp-apikey'],
+      didi: ['https://mcp.didichuxing.com/mcp-servers', 'query', 'key', undefined, 'https://mcp.didichuxing.com/'],
+      'wind-stock': ['https://mcp.wind.com.cn/vserver_stock_data/mcp/', 'header', 'Authorization', 'Bearer ${value}', 'https://market.windalice.com/#/user/overview'],
+      variflight: ['https://c-gw.variflight.com/chat_message/mcp/api', 'header', 'Authorization', 'Bearer ${value}', 'https://cmcp.variflight.com/'],
+    }
+    for (const [id, [url, location, name, valueTemplate, helpUrl]] of Object.entries(expected)) {
+      const connector = catalog.connectors.find(item => item.id === id)
+      expect(connector).toMatchObject({
+        id, official: true, remote: { type: 'streamable-http', url },
+        auth: {
+          type: 'api-key', in: location, name, helpUrl,
+          ...(valueTemplate === undefined ? {} : { valueTemplate }),
+        },
+      })
+    }
   })
 
   it('requires an API Key value template to contain exactly one value placeholder', () => {

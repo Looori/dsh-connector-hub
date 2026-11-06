@@ -5,7 +5,13 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { chromium, type Browser } from 'playwright'
 import { expect, it } from 'vitest'
 import { run, startDshWeb, waitFor, type DshWebProcess } from './dsh-process'
-import { CONNECTOR_ID, TEST_API_KEY, startFixtureServer } from './fixture-server'
+import {
+  BEARER_CONNECTOR_ID,
+  CONNECTOR_ID,
+  TENCENT_MAPS_CONNECTOR_ID,
+  TEST_API_KEY,
+  startFixtureServer,
+} from './fixture-server'
 
 const root = fileURLToPath(new URL('../..', import.meta.url))
 const packageDir = resolve(root, 'packages/connector-hub')
@@ -89,7 +95,7 @@ it('runs the API Key lifecycle through real DSH routes and the browser UI', { ti
     const catalog = await request('/api/connector-hub/catalog')
     expect(catalog.status).toBe(200)
     expect(catalog.body).toMatchObject({ source: 'network', stale: false })
-    expect(catalog.body.catalog.connectors).toHaveLength(1)
+    expect(catalog.body.catalog.connectors).toHaveLength(3)
     expect(catalog.body.catalog.connectors[0].id).toBe(CONNECTOR_ID)
 
     const rejected = await request('/api/connector-hub/api-key-connect', 'POST', { id: CONNECTOR_ID, key: 'wrong-key' })
@@ -156,6 +162,35 @@ it('runs the API Key lifecycle through real DSH routes and the browser UI', { ti
     expect(await readFile(configPath, 'utf8')).not.toContain(TEST_API_KEY)
     expect(await readFile(journal, 'utf8')).toContain(`delete true dsh-connector-hub ${CONNECTOR_ID}`)
 
+    for (const id of [BEARER_CONNECTOR_ID, TENCENT_MAPS_CONNECTOR_ID]) {
+      const before = fixture.requestDetails.length
+      const variantAdded = await request('/api/connector-hub/api-key-connect', 'POST', { id, key: TEST_API_KEY })
+      expect(variantAdded.status).toBe(200)
+      expect(variantAdded.body).toMatchObject({ id, status: 'connected', enabled: true })
+      expect(variantAdded.body.tools).toContain(`mcp__${id}__echo`)
+
+      const variantProbe = await request('/api/connector-hub/probe', 'POST', { id })
+      expect(variantProbe.status).toBe(200)
+      expect(variantProbe.body.lastProbe).toMatchObject({ ok: true })
+      expect((await request('/api/connector-hub/set-enabled', 'POST', { id, enabled: false })).body)
+        .toMatchObject({ enabled: false, status: 'disabled', tools: [] })
+      expect((await request('/api/connector-hub/set-enabled', 'POST', { id, enabled: true })).body)
+        .toMatchObject({ enabled: true, status: 'connected' })
+
+      const variantRequests = fixture.requestDetails.slice(before)
+      expect(variantRequests.length).toBeGreaterThan(2)
+      if (id === BEARER_CONNECTOR_ID) {
+        expect(variantRequests.every(item => item.authorization === `Bearer ${TEST_API_KEY}`)).toBe(true)
+      } else {
+        expect(variantRequests.every(item => item.format === '0' && item.key === TEST_API_KEY)).toBe(true)
+      }
+
+      expect((await request('/api/connector-hub/remove', 'POST', { id })).body).toEqual({ removed: true })
+      expect(await readFile(journal, 'utf8')).toContain(`delete true dsh-connector-hub ${id}`)
+    }
+    expect((await request('/api/connector-hub/connectors')).body).toEqual([])
+    expect(await readFile(configPath, 'utf8')).not.toContain(TEST_API_KEY)
+
     browser = await chromium.launch({
       headless: true,
       ...(existsSync(chromePath) ? { executablePath: chromePath } : {}),
@@ -177,14 +212,14 @@ it('runs the API Key lifecycle through real DSH routes and the browser UI', { ti
     await page.getByRole('tab', { name: 'Discover', exact: true }).waitFor()
     await page.getByTestId(`connector-card-${CONNECTOR_ID}`).waitFor()
 
-    await page.getByRole('button', { name: 'Add', exact: true }).click()
+    await page.getByTestId(`connector-card-${CONNECTOR_ID}`).getByRole('button', { name: 'Add', exact: true }).click()
     await page.getByRole('dialog', { name: 'Add connector' }).waitFor()
     await page.getByRole('button', { name: 'Cancel', exact: true }).click()
     await page.getByRole('dialog').waitFor({ state: 'hidden' })
     expect(connectRequests).toBe(0)
     expect((await request('/api/connector-hub/connectors')).body).toEqual([])
 
-    await page.getByRole('button', { name: 'Add', exact: true }).click()
+    await page.getByTestId(`connector-card-${CONNECTOR_ID}`).getByRole('button', { name: 'Add', exact: true }).click()
     await page.getByLabel('Test Key', { exact: true }).fill(TEST_API_KEY)
     const addResponse = page.waitForResponse(response =>
       response.url().includes('/api/connector-hub/api-key-connect') && response.request().method() === 'POST')

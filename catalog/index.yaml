@@ -1,8 +1,16 @@
 schemaVersion: 1
-revision: 2026-11-03.2
+revision: 2026-11-06.1
 connectors:
   - notion
   - xmind-cn
   - amap
   - baidu-map
   - tencent-docs
+  - qcc
+  - github
+  - gitee
+  - tencent-maps
+  - flight-master
+  - didi
+  - wind-stock
+  - variflight

@@ -2,18 +2,27 @@ import { createServer, type Server } from 'node:http'
 
 export const TEST_API_KEY = 'e2e-secret'
 export const CONNECTOR_ID = 'mock-api-key'
+export const BEARER_CONNECTOR_ID = 'mock-bearer'
+export const TENCENT_MAPS_CONNECTOR_ID = 'tencent-maps'
 
 export interface FixtureServer {
   origin: string
   catalogUrl: string
   catalog: ReturnType<typeof catalog>
   requests: string[]
+  requestDetails: {
+    path: string
+    format: string | null
+    key: string | null
+    authorization: string | undefined
+  }[]
   close(): Promise<void>
 }
 
 /** Local catalog and stateless Streamable HTTP MCP server; no external network access. */
 export async function startFixtureServer(): Promise<FixtureServer> {
   const requests: string[] = []
+  const requestDetails: FixtureServer['requestDetails'] = []
   let currentCatalog!: ReturnType<typeof catalog>
   const server = createServer(async (request, response) => {
     const url = new URL(request.url ?? '/', 'http://127.0.0.1')
@@ -21,12 +30,23 @@ export async function startFixtureServer(): Promise<FixtureServer> {
       respondJson(response, 200, currentCatalog)
       return
     }
-    if (!['/mcp', '/v2/mcp'].includes(url.pathname)) {
+    if (!['/mcp', '/v2/mcp', '/bearer/mcp', '/tencent/mcp'].includes(url.pathname)) {
       respondJson(response, 404, { error: 'Not found' })
       return
     }
     requests.push(url.pathname)
-    if (request.headers['x-api-key'] !== TEST_API_KEY) {
+    requestDetails.push({
+      path: url.pathname,
+      format: url.searchParams.get('format'),
+      key: url.searchParams.get('key'),
+      authorization: request.headers.authorization,
+    })
+    const authorized = url.pathname === '/bearer/mcp'
+      ? request.headers.authorization === `Bearer ${TEST_API_KEY}`
+      : url.pathname === '/tencent/mcp'
+        ? url.searchParams.get('key') === TEST_API_KEY && url.searchParams.get('format') === '0'
+        : request.headers['x-api-key'] === TEST_API_KEY
+    if (!authorized) {
       respondJson(response, 401, { error: 'Invalid API Key' })
       return
     }
@@ -63,6 +83,7 @@ export async function startFixtureServer(): Promise<FixtureServer> {
     catalogUrl: `${origin}/catalog.json`,
     catalog: currentCatalog,
     requests,
+    requestDetails,
     close: () => closeServer(server),
   }
 }
@@ -82,6 +103,34 @@ function catalog(origin: string) {
       remote: { type: 'streamable-http', url: `${origin}/mcp` },
       auth: {
         type: 'api-key', in: 'header', name: 'x-api-key',
+        label: { zh: '测试 Key', en: 'Test Key' },
+        helpUrl: 'https://example.com/key',
+      },
+    }, {
+      id: BEARER_CONNECTOR_ID,
+      name: { zh: '模拟 Bearer 连接器', en: 'Mock Bearer' },
+      description: { zh: '仅用于自动化测试。', en: 'Used only by automated tests.' },
+      icon: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciLz4=',
+      homepage: 'https://example.com',
+      publisher: 'Connector Hub Tests',
+      official: false,
+      remote: { type: 'streamable-http', url: `${origin}/bearer/mcp` },
+      auth: {
+        type: 'api-key', in: 'header', name: 'Authorization', valueTemplate: 'Bearer ${value}',
+        label: { zh: '测试 Key', en: 'Test Key' },
+        helpUrl: 'https://example.com/key',
+      },
+    }, {
+      id: TENCENT_MAPS_CONNECTOR_ID,
+      name: { zh: '模拟腾讯地图', en: 'Mock Tencent Maps' },
+      description: { zh: '仅用于自动化测试。', en: 'Used only by automated tests.' },
+      icon: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciLz4=',
+      homepage: 'https://example.com',
+      publisher: 'Connector Hub Tests',
+      official: false,
+      remote: { type: 'streamable-http', url: `${origin}/tencent/mcp?format=0` },
+      auth: {
+        type: 'api-key', in: 'query', name: 'key',
         label: { zh: '测试 Key', en: 'Test Key' },
         helpUrl: 'https://example.com/key',
       },
