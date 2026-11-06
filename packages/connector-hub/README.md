@@ -13,6 +13,12 @@ A community connector hub for [DeepSeek Harness](https://github.com/DeepSeek-AI/
 
 Install `dsh-connector-hub` from the DSH **Plugins** page, open the **Connectors** tab, and choose a service on **Discover**. Complete its OAuth authorization or enter its API Key when prompted.
 
+Or install it from a terminal into a named profile (`web` is the profile name; use your own):
+
+```sh
+dsh plugin --profile web add dsh-connector-hub
+```
+
 The catalog includes:
 
 | Connector | Authentication |

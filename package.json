@@ -9,6 +9,8 @@
   "scripts": {
     "build": "pnpm --filter dsh-connector-hub run build",
     "catalog:build": "node catalog/scripts/build.mjs",
+    "market:build": "node market/build.mjs",
+    "market:publish": "node market/publish.mjs",
     "typecheck": "pnpm --filter dsh-connector-hub run typecheck",
     "test": "vitest run"
   },

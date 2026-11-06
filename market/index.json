@@ -1,0 +1,74 @@
+{
+  "format": 1,
+  "title": {
+    "en": "Looori DSH plugins",
+    "zh": "Looori 的 DSH 插件"
+  },
+  "description": {
+    "en": "Plugins published by Looori for DeepSeek Harness.",
+    "zh": "Looori 发布的 DeepSeek Harness 插件。"
+  },
+  "metadata": {
+    "categories": {
+      "connectors": {
+        "title": {
+          "en": "Connectors",
+          "zh": "连接器"
+        }
+      }
+    },
+    "labels": {
+      "macos": {
+        "title": {
+          "en": "macOS",
+          "zh": "macOS"
+        }
+      }
+    }
+  },
+  "plugins": [
+    {
+      "name": "dsh-connector-hub",
+      "title": {
+        "en": "Connector Hub",
+        "zh": "连接器市场"
+      },
+      "description": {
+        "en": "Browse 13 curated remote MCP connectors in a Connectors tab, authorize them with OAuth or an API key, and keep credentials in the macOS Keychain.",
+        "zh": "在「连接器」tab 中浏览 13 个精选远程 MCP 连接器，用 OAuth 或 API Key 完成授权，凭据保存在 macOS 钥匙串。"
+      },
+      "icon": "icons/connector-hub.svg",
+      "author": "Looori",
+      "homepage": "https://github.com/Looori/dsh-connector-hub#readme",
+      "repository": {
+        "url": "https://github.com/Looori/dsh-connector-hub",
+        "directory": "packages/connector-hub"
+      },
+      "metadata": {
+        "category": "connectors",
+        "labels": [
+          "macos"
+        ],
+        "keywords": [
+          "mcp",
+          "connectors",
+          "oauth",
+          "api-key",
+          "keychain"
+        ]
+      },
+      "versions": [
+        {
+          "version": "0.2.0",
+          "publishTimestamp": 1793974794,
+          "source": {
+            "type": "npm"
+          },
+          "engines": {
+            "dsh": ">=0.2.1-rc.5 <0.3.0"
+          }
+        }
+      ]
+    }
+  ]
+}

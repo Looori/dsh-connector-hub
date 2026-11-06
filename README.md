@@ -21,6 +21,12 @@ DeepSeek Harness（DSH）的社区连接器插件：在 Plugins 页的「连接�
 
 在 DSH 的 Plugins 页安装 `dsh-connector-hub`，然后打开「连接器」tab，在「发现」页选择服务并完成授权或填写 API Key。
 
+也可以在终端装到指定 profile（把 `web` 换成你的 profile 名）：
+
+```sh
+dsh plugin --profile web add dsh-connector-hub
+```
+
 详细使用与安全说明见 [npm 包说明](packages/connector-hub/README.md)。
 
 ## 数据与安全

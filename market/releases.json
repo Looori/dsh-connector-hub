@@ -1,0 +1,8 @@
+{
+  "dsh-connector-hub": {
+    "0.2.0": {
+      "publishTimestamp": 1793974794,
+      "engines": ">=0.2.1-rc.5 <0.3.0"
+    }
+  }
+}

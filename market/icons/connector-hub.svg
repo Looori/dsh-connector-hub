@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48" role="img" aria-label="Connector hub">
+  <rect width="48" height="48" rx="11" fill="#0F172A"/>
+  <g fill="none" stroke="#5EEAD4" stroke-width="2.5" stroke-linecap="round">
+    <path d="M24 24 13 13"/>
+    <path d="M24 24 35 13"/>
+    <path d="M24 24 13 35"/>
+    <path d="M24 24 35 35"/>
+  </g>
+  <circle cx="24" cy="24" r="5" fill="#5EEAD4"/>
+  <g fill="#E2E8F0">
+    <circle cx="13" cy="13" r="3.2"/>
+    <circle cx="35" cy="13" r="3.2"/>
+    <circle cx="13" cy="35" r="3.2"/>
+    <circle cx="35" cy="35" r="3.2"/>
+  </g>
+</svg>
