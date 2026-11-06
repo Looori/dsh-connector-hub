@@ -448,6 +448,9 @@ function MineRow(props: MineRowProps): ReactNode {
           )}
         </dl>
       </DisclosureRow>
+      {connector.errorCode === 'server-name-conflict' && (
+        <div role="alert" style={styles.error}>{t('serverNameConflict').replace('{id}', connector.id)}</div>
+      )}
     </article>
   )
 }

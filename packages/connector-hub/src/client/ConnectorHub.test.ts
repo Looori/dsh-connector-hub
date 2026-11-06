@@ -75,7 +75,7 @@ const notion: CatalogConnector = {
 function view(overrides: Partial<ConnectorView> = {}): ConnectorView {
   return {
     id: 'amap', enabled: true, status: 'connected', phase: 'active', generation: 1,
-    mountedAt: '2026-11-03T08:00:00.000Z', tools: ['mcp__amap__maps_geo'], error: null,
+    mountedAt: '2026-11-03T08:00:00.000Z', tools: ['mcp__amap__maps_geo'], error: null, errorCode: null,
     catalogRevision: 'test.1', addedAt: '2026-11-03T08:00:00.000Z',
     remote: amap.remote, auth: amap.auth, lastProbe: null,
     ...overrides,
@@ -165,6 +165,22 @@ describe('connector hub browser UI', () => {
     expect(screen.getByText('https://mcp.amap.com/mcp')).toBeTruthy()
     expect(screen.getAllByText('probe failed').length).toBeGreaterThan(0)
     expect(api.probe).toHaveBeenCalledWith('amap')
+  })
+
+  it('shows duplicate serverName guidance and keeps the raw error in details', async () => {
+    const message = 'mcp-client: serverName "amap" is already in use by another mcp-client instance — pick a unique serverName in cordis.yml'
+    const initial = view({
+      status: 'failed', phase: 'failed', tools: [], error: message, errorCode: 'server-name-conflict',
+    })
+    const api = apiFixture([initial])
+    vi.mocked(api.probe).mockResolvedValue(initial)
+    renderHub(api)
+
+    await screen.findByTestId('mine-row-amap')
+    expect(screen.getByRole('alert').textContent).toBe(zh.serverNameConflict.replace('{id}', 'amap'))
+    expect(screen.queryByText(message)).toBeNull()
+    await userEvent.click(screen.getByText('高德地图'))
+    expect(await screen.findByText(message)).toBeTruthy()
   })
 
   it('adds an API Key connector, closes the modal, refreshes, and shows a toast', async () => {

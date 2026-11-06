@@ -42,6 +42,7 @@ Removing a connector deletes its local credential. Where supported, the plugin a
 - No user-defined connectors outside the catalog.
 - No per-session switches or tool-call approval flow.
 - If a service is unavailable at startup, use **Remount** after it recovers.
+- Duplicate-name guidance only covers mount failures observed by this plugin. If this plugin mounts first and a manually configured MCP client with the same name fails afterward, that error appears only in the DSH logs.
 
 ## Development
 

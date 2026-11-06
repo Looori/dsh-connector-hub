@@ -293,7 +293,7 @@ export class ConnectorHubService {
     await this.mounts.unmount(id)
     return this.mounts.list({})[0] ?? {
       id, enabled: false, status: 'disabled', phase: null, generation: null,
-      mountedAt: null, tools: [], error: null,
+      mountedAt: null, tools: [], error: null, errorCode: null,
     }
   }
 

@@ -103,7 +103,7 @@ describe('MountManager', () => {
     })
   })
 
-  it('contains synchronous namespace conflicts as a failed connector state', async () => {
+  it('contains synchronous mount failures without a specialized error code', async () => {
     const { manager, warnings } = fixture({ mountError: new Error('serverName already in use') })
     const connectors = { notion: connector('notion') }
 
@@ -111,7 +111,20 @@ describe('MountManager', () => {
     expect(result.status).toBe('failed')
     expect(result.phase).toBe('failed')
     expect(result.error).toContain('already in use')
+    expect(result.errorCode).toBeNull()
     expect(warnings).toHaveLength(1)
+  })
+
+  it('classifies the rc.5 duplicate serverName error', async () => {
+    const message = 'mcp-client: serverName "amap" is already in use by another mcp-client instance — pick a unique serverName in cordis.yml'
+    const { manager } = fixture({ mountError: new Error(message) })
+
+    const result = await manager.mount('amap', connector('amap'))
+    expect(result).toMatchObject({
+      status: 'failed',
+      error: message,
+      errorCode: 'server-name-conflict',
+    })
   })
 
   it('sanitizes asynchronous mount failures without leaking credentials', async () => {

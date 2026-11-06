@@ -36,7 +36,10 @@ interface MountEntry {
   mountedAt: string
   settled: boolean
   error?: string
+  errorCode?: ConnectorMountErrorCode
 }
+
+export type ConnectorMountErrorCode = 'server-name-conflict'
 
 export interface ConnectorMountSnapshot {
   id: string
@@ -47,6 +50,7 @@ export interface ConnectorMountSnapshot {
   mountedAt: string | null
   tools: string[]
   error: string | null
+  errorCode: ConnectorMountErrorCode | null
 }
 
 /** Owns all mcp-client child fibers so later session-scoped switches only change this module. */
@@ -152,12 +156,14 @@ export class MountManager {
         (error: unknown) => {
           entry.settled = true
           entry.error = safeErrorMessage(error)
+          entry.errorCode = mountErrorCode(entry.error)
           this.context.logger.warn('connector-hub: %s mount failed: %s', id, entry.error)
         },
       )
     } catch (error) {
       entry.settled = true
       entry.error = safeErrorMessage(error)
+      entry.errorCode = mountErrorCode(entry.error)
       this.context.logger.warn('connector-hub: %s mount failed: %s', id, entry.error)
     }
     return entry
@@ -195,6 +201,7 @@ export class MountManager {
       mountedAt: entry?.mountedAt ?? null,
       tools: registeredTools ?? [],
       error: derived.error,
+      errorCode: entry?.errorCode ?? null,
     }
   }
 
@@ -223,6 +230,10 @@ export function phaseOf(fiber: Fiber | undefined): MountPhase {
 function sameMountConfig(left: StoredConnector, right: StoredConnector): boolean {
   return JSON.stringify({ remote: left.remote, auth: left.auth })
     === JSON.stringify({ remote: right.remote, auth: right.auth })
+}
+
+function mountErrorCode(message: string): ConnectorMountErrorCode | undefined {
+  return /serverName "[^"]+" is already in use/.test(message) ? 'server-name-conflict' : undefined
 }
 
 async function settle(fiber: MountFiber | undefined): Promise<void> {
