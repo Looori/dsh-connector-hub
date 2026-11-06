@@ -5,3 +5,8 @@ coverage/
 .dsh/
 .DS_Store
 *.log
+
+# Local-only working notes and agent instructions
+/AGENTS.md
+/CLAUDE.md
+/docs/
