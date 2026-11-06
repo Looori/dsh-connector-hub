@@ -42,7 +42,11 @@ vi.mock('@deepseek-ai/dsh-client-ui-primitives', () => ({
     }, item.label)) : null),
 }))
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.useRealTimers()
+  Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' })
+})
 
 const amap: CatalogConnector = {
   id: 'amap',
@@ -119,6 +123,7 @@ function apiFixture(connectors: ConnectorView[] = [], items: CatalogConnector[] 
 function renderHub(api: ConnectorHubApi, options: {
   openWindow?: (url: string) => Window | null
   copyText?: (text: string) => Promise<void>
+  pollMs?: number
 } = {}) {
   return render(createElement(ConnectorHub, {
     api,
@@ -181,6 +186,56 @@ describe('connector hub browser UI', () => {
     expect(screen.queryByText(message)).toBeNull()
     await userEvent.click(screen.getByText('高德地图'))
     expect(await screen.findByText(message)).toBeTruthy()
+  })
+
+  it('probes every enabled connector after each polling period', async () => {
+    vi.useFakeTimers()
+    const api = apiFixture([
+      view(), oauthView(), view({ id: 'baidu-map', enabled: false, status: 'disabled' }),
+    ])
+    renderHub(api, { pollMs: 60_000 })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(vi.mocked(api.probe).mock.calls.map(call => call[0])).toEqual(['amap', 'notion'])
+
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(vi.mocked(api.probe).mock.calls.map(call => call[0])).toEqual(['amap', 'notion', 'amap', 'notion'])
+    expect(api.probe).not.toHaveBeenCalledWith('baidu-map')
+    expect(api.listConnectors).toHaveBeenCalledTimes(2)
+  })
+
+  it('refreshes without starting another probe round while one is pending', async () => {
+    vi.useFakeTimers()
+    const api = apiFixture([view()])
+    let finishProbe!: (value: ConnectorView) => void
+    vi.mocked(api.probe)
+      .mockImplementationOnce(() => new Promise(resolve => { finishProbe = resolve }))
+      .mockResolvedValue(view())
+    renderHub(api, { pollMs: 60_000 })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(api.probe).toHaveBeenCalledTimes(1)
+
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(api.probe).toHaveBeenCalledTimes(1)
+    expect(api.listConnectors).toHaveBeenCalledTimes(2)
+    finishProbe(view())
+    await vi.advanceTimersByTimeAsync(0)
+
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(api.probe).toHaveBeenCalledTimes(2)
+  })
+
+  it('refreshes the list without probing while the page is hidden', async () => {
+    vi.useFakeTimers()
+    const api = apiFixture([view()])
+    renderHub(api, { pollMs: 60_000 })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(api.probe).toHaveBeenCalledTimes(1)
+    vi.mocked(api.probe).mockClear()
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' })
+
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(api.probe).not.toHaveBeenCalled()
+    expect(api.listConnectors).toHaveBeenCalledTimes(2)
   })
 
   it('adds an API Key connector, closes the modal, refreshes, and shows a toast', async () => {

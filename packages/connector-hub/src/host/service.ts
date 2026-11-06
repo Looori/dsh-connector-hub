@@ -60,6 +60,8 @@ export class ConnectorHubService {
   private readonly probeMounted: NonNullable<ConnectorHubServiceOptions['probeMounted']>
   private readonly now: () => Date
   private readonly probes = new Map<string, ConnectorProbeResult>()
+  private readonly pendingProbes = new Map<string, Promise<ConnectorProbeResult>>()
+  private readonly configurationGenerations = new Map<string, number>()
   private queue: Promise<void> = Promise.resolve()
 
   constructor(options: ConnectorHubServiceOptions) {
@@ -180,6 +182,7 @@ export class ConnectorHubService {
   ): Promise<ConnectorView> {
     const existing = config.connectors[id]
     const previousSecret = existing ? await this.secrets.read(id) : null
+    this.bumpConfiguration(id)
     try {
       await this.secrets.write(id, secret)
       const next = await this.store.update(draft => { draft.connectors[id] = candidate })
@@ -200,14 +203,35 @@ export class ConnectorHubService {
     }
   }
 
-  probe(id: string): Promise<ConnectorView> {
-    return this.serialize(async () => {
-      const config = await this.sync()
-      if (!config.connectors[id]) throw new ConnectorHubError('Connector is not added', 404)
-      const result = await this.probeMounted(id)
-      this.probes.set(id, result)
-      return this.view(id, config.connectors[id])
-    })
+  async probe(id: string): Promise<ConnectorView> {
+    const connector = this.store.snapshot()?.connectors[id]
+    if (!connector) throw new ConnectorHubError('Connector is not added', 404)
+    const generation = this.configurationGeneration(id)
+    const result = await this.sharedProbe(id)
+    if (this.configurationGeneration(id) === generation) this.probes.set(id, result)
+    const current = this.store.snapshot()?.connectors[id]
+    if (!current) throw new ConnectorHubError('Connector is not added', 404)
+    return this.view(id, current)
+  }
+
+  private configurationGeneration(id: string): number {
+    return this.configurationGenerations.get(id) ?? 0
+  }
+
+  private bumpConfiguration(id: string): void {
+    this.configurationGenerations.set(id, this.configurationGeneration(id) + 1)
+  }
+
+  private async sharedProbe(id: string): Promise<ConnectorProbeResult> {
+    const pending = this.pendingProbes.get(id)
+    if (pending) return pending
+    const promise = this.probeMounted(id)
+    this.pendingProbes.set(id, promise)
+    try {
+      return await promise
+    } finally {
+      if (this.pendingProbes.get(id) === promise) this.pendingProbes.delete(id)
+    }
   }
 
   remount(id: string): Promise<ConnectorView> {
@@ -228,6 +252,7 @@ export class ConnectorHubService {
       const current = await this.store.read()
       if (!current.connectors[id]) throw new ConnectorHubError('Connector is not added', 404)
       if (enabled && this.reauthRequired.has(id)) throw new ConnectorHubError('Reauthorization is required before enabling', 409)
+      this.bumpConfiguration(id)
       const next = await this.store.update(draft => { draft.connectors[id].enabled = enabled })
       const connector = next.connectors[id]
       if (enabled) await this.mounts.remount(id, connector)
@@ -242,6 +267,7 @@ export class ConnectorHubService {
       const connector = config.connectors[id]
       if (!connector) throw new ConnectorHubError('Connector is not added', 404)
       const secret = await this.secrets.read(id).catch(() => null)
+      this.bumpConfiguration(id)
       await this.oauth?.cancelConnector(id)
       await this.mounts.unmount(id)
       await this.secrets.delete(id)

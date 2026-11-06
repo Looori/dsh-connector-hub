@@ -67,12 +67,16 @@ export function ConnectorHub({
   const [removeTarget, setRemoveTarget] = useState<CatalogConnector | null>(null)
   const [toast, setToast] = useState<{ id: number, text: string } | null>(null)
   const toastSequence = useRef(0)
+  const probeInProgress = useRef(false)
+  const busyIdRef = useRef<string | null>(null)
 
   const showToast = useCallback((text: string) => {
     setToast({ id: ++toastSequence.current, text })
   }, [])
 
-  const refresh = useCallback(async (probeOnOpen = false): Promise<ConnectorView[] | null> => {
+  const refresh = useCallback(async (probeRequested = false): Promise<ConnectorView[] | null> => {
+    const shouldProbe = probeRequested && !probeInProgress.current
+    if (shouldProbe) probeInProgress.current = true
     try {
       const [nextCatalog, nextConnectors] = await Promise.all([api.getCatalog(), api.listConnectors()])
       setCatalog(nextCatalog)
@@ -81,10 +85,12 @@ export function ConnectorHub({
       setLoadError(null)
       setLoading(false)
 
-      if (probeOnOpen) {
-        const probes = await Promise.all(nextConnectors.filter(item => item.enabled).map(async item => {
-          try { return await api.probe(item.id) } catch { return null }
-        }))
+      if (shouldProbe) {
+        const probes = await Promise.all(nextConnectors
+          .filter(item => item.enabled && item.id !== busyIdRef.current)
+          .map(async item => {
+            try { return await api.probe(item.id) } catch { return null }
+          }))
         const byId = new Map(probes.filter(item => item !== null).map(item => [item.id, item]))
         const probed = nextConnectors.map(item => byId.get(item.id) ?? item)
         setConnectors(probed)
@@ -95,16 +101,22 @@ export function ConnectorHub({
       setLoadError(errorMessage(error))
       setLoading(false)
       return null
+    } finally {
+      if (shouldProbe) probeInProgress.current = false
     }
   }, [api])
 
   useEffect(() => {
     void refresh(true)
-    const timer = setInterval(() => { void refresh() }, pollMs)
+    const timer = setInterval(() => {
+      const hidden = typeof document !== 'undefined' && document.visibilityState === 'hidden'
+      void refresh(!hidden)
+    }, pollMs)
     return () => clearInterval(timer)
   }, [pollMs, refresh])
 
   async function runAction(id: string, action: () => Promise<unknown>, success?: LocaleKey): Promise<void> {
+    busyIdRef.current = id
     setBusyId(id)
     setActionError(null)
     try {
@@ -114,6 +126,7 @@ export function ConnectorHub({
     } catch (error) {
       setActionError(errorMessage(error))
     } finally {
+      busyIdRef.current = null
       setBusyId(null)
     }
   }

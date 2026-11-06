@@ -102,6 +102,60 @@ describe('ConnectorHubService API Key lifecycle', () => {
     expect(await fixture.service.listConnectors()).toEqual([])
   })
 
+  it('deduplicates concurrent probes for the same connector', async () => {
+    let calls = 0
+    let finishProbe
+    const fixture = await startFixture({
+      probeMounted: () => {
+        calls++
+        return new Promise(resolve => { finishProbe = resolve })
+      },
+    })
+    await fixture.service.connectApiKey('amap', 'api-secret')
+
+    const first = fixture.service.probe('amap')
+    const second = fixture.service.probe('amap')
+    expect(calls).toBe(1)
+    finishProbe(probe(true))
+    const results = await Promise.all([first, second])
+    expect(results.map(result => result.lastProbe)).toEqual([probe(true), probe(true)])
+    expect(calls).toBe(1)
+  })
+
+  it('does not block Key replacement or overwrite its probe with a stale result', async () => {
+    const pending = []
+    const fixture = await startFixture({
+      probeMounted: () => new Promise(resolve => { pending.push(resolve) }),
+    })
+    await fixture.service.connectApiKey('amap', 'old-secret')
+
+    const probing = fixture.service.probe('amap')
+    expect(pending).toHaveLength(1)
+    const replaced = await fixture.service.connectApiKey('amap', 'new-secret')
+    expect(replaced.lastProbe).toMatchObject({ ok: true })
+    expect(await fixture.secrets.read('amap')).toEqual({ v: 1, apiKey: 'new-secret' })
+
+    pending.shift()(probe(false, 'stale probe'))
+    const result = await probing
+    expect(result.lastProbe).toMatchObject({ ok: true })
+    expect(result.lastProbe.error).toBeNull()
+  })
+
+  it('does not block removal and discards a probe that finishes afterward', async () => {
+    const pending = []
+    const fixture = await startFixture({
+      probeMounted: () => new Promise(resolve => { pending.push(resolve) }),
+    })
+    await fixture.service.connectApiKey('amap', 'api-secret')
+
+    const probing = fixture.service.probe('amap')
+    expect(pending).toHaveLength(1)
+    expect(await fixture.service.remove('amap')).toEqual({ removed: true })
+    pending.shift()(probe(false, 'removed connector'))
+    await expect(probing).rejects.toMatchObject({ status: 404 })
+    expect(await fixture.service.listConnectors()).toEqual([])
+  })
+
   it('rejects unknown and non-API-Key catalog connectors', async () => {
     const fixture = await startFixture()
     await expect(fixture.service.connectApiKey('unknown', 'secret')).rejects.toMatchObject({ status: 404 })
