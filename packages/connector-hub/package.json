@@ -1,6 +1,6 @@
 {
   "name": "dsh-connector-hub",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Community connector hub for DeepSeek Harness; not an official DeepSeek product.",
   "keywords": [
     "deepseek-harness",

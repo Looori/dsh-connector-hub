@@ -13,7 +13,7 @@ A community connector hub for [DeepSeek Harness](https://github.com/DeepSeek-AI/
 
 Install `dsh-connector-hub` from the DSH **Plugins** page, open the **Connectors** tab, and choose a service on **Discover**. Complete its OAuth authorization or enter its API Key when prompted.
 
-The first release includes:
+The catalog includes:
 
 | Connector | Authentication |
 | --- | --- |
@@ -22,6 +22,16 @@ The first release includes:
 | Amap | API Key |
 | Baidu Map | API Key |
 | Tencent Docs | API Key |
+| Qichacha | API Key |
+| GitHub | API Key (personal access token) |
+| Gitee | API Key (personal access token) |
+| Tencent Maps | API Key |
+| Flight Master Aviation Data | API Key |
+| DiDi | API Key |
+| Wind Stock Data | API Key |
+| VariFlight | API Key |
+
+Enter the raw credential shown by the provider. For services that require Bearer authentication, the gateway adds the prefix and avoids duplicating it if already present.
 
 Connected tools are mounted at the profile root and become available to sessions in that profile. You can probe, remount, disable, re-enable, replace credentials, or remove a connector from **Yours**.
 
