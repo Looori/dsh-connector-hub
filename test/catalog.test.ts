@@ -21,7 +21,7 @@ describe('initial connector catalog', () => {
   it('contains exactly the thirteen configured connectors in display order', () => {
     expect(validateCatalog(catalog)).toEqual([])
     expect(catalog.schemaVersion).toBe(1)
-    expect(catalog.revision).toBe('2026-11-06.1')
+    expect(catalog.revision).toBe('2026-11-14.1')
     expect(catalog.connectors.map(connector => connector.id)).toEqual([
       'notion', 'xmind-cn', 'amap', 'baidu-map', 'tencent-docs',
       'qcc', 'github', 'gitee', 'tencent-maps', 'flight-master', 'didi', 'wind-stock', 'variflight',

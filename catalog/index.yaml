@@ -1,5 +1,5 @@
 schemaVersion: 1
-revision: 2026-11-06.1
+revision: 2026-11-14.1
 connectors:
   - notion
   - xmind-cn

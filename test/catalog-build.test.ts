@@ -67,7 +67,7 @@ describe('catalog publishing', () => {
     const published = JSON.parse(await readFile(result.outputPath, 'utf8'))
     expect(validateCatalog(published)).toEqual([])
     expect(result.outputPath).toBe(resolve(site, 'dsh-connector-hub/catalog/v2/index.json'))
-    expect(result.revision).toBe('2026-11-06.1')
+    expect(result.revision).toBe('2026-11-14.1')
     expect(result.ids).toEqual([
       'notion', 'xmind-cn', 'amap', 'baidu-map', 'tencent-docs',
       'qcc', 'github', 'gitee', 'tencent-maps', 'flight-master', 'didi', 'wind-stock', 'variflight',
