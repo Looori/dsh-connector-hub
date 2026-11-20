@@ -13,7 +13,6 @@ export interface OAuthAuthBase {
   type: 'oauth'
   scope?: string
   authorizationParams?: Record<string, string>
-  callbackPath: string
 }
 
 export type OAuthClientIdentity =
@@ -24,7 +23,21 @@ export type OAuthPortPolicy =
   | { portPolicy: 'random', fixedPort?: never }
   | { portPolicy: 'fixed', fixedPort: number }
 
-export type OAuthAuth = OAuthAuthBase & OAuthClientIdentity & OAuthPortPolicy
+export type OAuthAuthorizationCodeAuth = OAuthAuthBase & OAuthClientIdentity & OAuthPortPolicy & {
+  flow?: 'authorization-code'
+  callbackPath: string
+}
+
+export type OAuthDeviceAuth = OAuthAuthBase & {
+  flow: 'device'
+  clientId: string
+  clientMetadataUrl?: never
+  callbackPath?: never
+  portPolicy?: never
+  fixedPort?: never
+}
+
+export type OAuthAuth = OAuthAuthorizationCodeAuth | OAuthDeviceAuth
 
 export interface ApiKeyAuth {
   type: 'api-key'

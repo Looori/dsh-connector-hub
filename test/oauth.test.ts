@@ -149,6 +149,81 @@ describe('OAuth authorization lifecycle', () => {
     expect(originalFiber.disposed).toBe(false)
     expect((await fixture.store.read()).connectors.notion.addedAt).toBe('2026-11-04T00:00:00.000Z')
   })
+
+  it('runs device authorization through pending and slow_down without dynamic registration', async () => {
+    const fixture = await startFixture({ device: true, timeoutMs: 10_000 })
+    fixture.server.devicePollOutcomes.push('authorization_pending', 'slow_down')
+    const started = await fixture.service.startOAuth('github')
+
+    expect(started).toMatchObject({
+      authorizationUrl: `${fixture.server.origin}/device`, userCode: 'ABCD-EFGH',
+    })
+    await waitFor(() => fixture.service.oauthStatus(started.attemptId).status === 'success', 6_000)
+    expect(fixture.server.deviceRequests).toHaveLength(1)
+    expect(fixture.server.deviceRequests[0].get('client_id')).toBe('shared-public-client')
+    expect(fixture.server.deviceRequests[0].get('scope')).toBe('offline_access')
+    expect(fixture.server.devicePollRequests).toHaveLength(3)
+    expect(fixture.server.devicePollRequests[0].get('device_code')).toBe('device-code')
+    expect(fixture.server.registrationRequests).toBe(0)
+    expect(await fixture.secrets.read('github')).toEqual({
+      v: 1,
+      tokens: {
+        access_token: 'access-1', refresh_token: 'refresh-1',
+        expires_at: Date.parse('2026-11-04T01:00:00.000Z'), scope: 'openid mcp:connect',
+      },
+    })
+    expect((await fixture.store.read()).connectors.github.auth).toMatchObject({ flow: 'device' })
+  }, 7_000)
+
+  it('cancels device authorization without persisting partial state', async () => {
+    const fixture = await startFixture({ device: true })
+    const started = await fixture.service.startOAuth('github')
+    await fixture.service.cancelOAuth(started.attemptId)
+
+    expect(fixture.service.oauthStatus(started.attemptId)).toMatchObject({
+      status: 'failed', error: 'OAuth authorization cancelled',
+    })
+    expect(await fixture.store.read()).toEqual({ schemaVersion: 1, connectors: {} })
+    expect(await fixture.secrets.read('github')).toBeNull()
+  })
+
+  it.each([
+    ['access_denied', 'OAuth authorization was denied'],
+    ['expired_token', 'OAuth device code expired'],
+  ])('reports device authorization failure %s', async (outcome, message) => {
+    const fixture = await startFixture({ device: true })
+    fixture.server.devicePollOutcomes.push(outcome)
+    const started = await fixture.service.startOAuth('github')
+
+    await waitFor(() => fixture.service.oauthStatus(started.attemptId).status === 'failed')
+    expect(fixture.service.oauthStatus(started.attemptId).error).toBe(message)
+    expect(await fixture.store.read()).toEqual({ schemaVersion: 1, connectors: {} })
+  })
+
+  it('migrates an existing API Key connector after successful device authorization', async () => {
+    const fixture = await startFixture({ device: true })
+    const item = fixture.catalogValue.connectors.find(connector => connector.id === 'github')
+    await fixture.store.update(draft => {
+      draft.connectors.github = {
+        catalogRevision: 'api-key.1',
+        remote: structuredClone(item.remote),
+        auth: {
+          type: 'api-key', in: 'header', name: 'Authorization', valueTemplate: 'Bearer ${value}',
+          label: { zh: 'Key', en: 'Key' }, helpUrl: 'https://example.com/key',
+        },
+        enabled: true,
+        addedAt: '2026-11-03T00:00:00.000Z',
+      }
+    })
+    await fixture.secrets.write('github', { v: 1, apiKey: 'old-api-key' })
+    const started = await fixture.service.startOAuth('github', { applyCatalogUpdate: true })
+    await waitFor(() => fixture.service.oauthStatus(started.attemptId).status === 'success')
+
+    expect((await fixture.store.read()).connectors.github).toMatchObject({
+      catalogRevision: 'oauth-test.1', auth: { type: 'oauth', flow: 'device' },
+    })
+    expect(await fixture.secrets.read('github')).toMatchObject({ tokens: { access_token: 'access-1' } })
+  })
 })
 
 async function completeAuthorization(fixture, started, authorization) {
@@ -167,7 +242,7 @@ function callbackUrl(started, authorization, issuer) {
 
 async function startFixture(options = {}) {
   const home = await mkdtemp(join(tmpdir(), 'connector-hub-oauth-'))
-  const server = await startOAuthFixtureServer()
+  const server = await startOAuthFixtureServer({ includeDeviceConnector: options.device === true })
   const oauth = new OAuthManager({
     timeoutMs: options.timeoutMs ?? 1000,
     now: () => new Date('2026-11-04T00:00:00.000Z'),
@@ -183,6 +258,7 @@ async function startFixture(options = {}) {
     await new Promise(resolve => reservation.close(resolve))
   }
   const catalogValue = catalog(server.origin, options.fixed, fixedPort)
+  if (options.device) catalogValue.connectors.push(structuredClone(server.catalog.connectors[1]))
   const catalogService = new CatalogService({
     dshHome: home,
     snapshot: catalogValue,
@@ -265,8 +341,8 @@ function catalog(origin, fixed = false, fixedPort) {
   }
 }
 
-async function waitFor(predicate) {
-  const deadline = Date.now() + 1000
+async function waitFor(predicate, timeoutMs = 1000) {
+  const deadline = Date.now() + timeoutMs
   while (!predicate()) {
     if (Date.now() > deadline) throw new Error('Timed out waiting for OAuth state')
     await new Promise(resolve => setTimeout(resolve, 10))

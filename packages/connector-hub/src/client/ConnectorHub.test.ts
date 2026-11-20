@@ -505,6 +505,26 @@ describe('connector hub browser UI', () => {
     expect(screen.queryByRole('dialog')).toBeNull()
   })
 
+  it('displays and copies a device authorization code', async () => {
+    const api = apiFixture()
+    const copyText = vi.fn().mockResolvedValue(undefined)
+    vi.mocked(api.startOAuth).mockResolvedValue({
+      attemptId: '00000000-0000-4000-8000-000000000001',
+      authorizationUrl: 'https://example.com/device',
+      userCode: 'ABCD-EFGH',
+    })
+    renderHub(api, { openWindow: () => null, copyText })
+
+    await userEvent.click(within(await screen.findByTestId('connector-card-notion')).getByRole('button', { name: '添加' }))
+    await userEvent.click(screen.getByRole('button', { name: '前往授权' }))
+    expect(await screen.findByText('ABCD-EFGH')).toBeTruthy()
+    await userEvent.click(screen.getByRole('button', { name: '复制验证码' }))
+    await waitFor(() => expect(copyText).toHaveBeenCalledWith('ABCD-EFGH'))
+    expect(await screen.findByText('验证码已复制。')).toBeTruthy()
+    await userEvent.click(screen.getByRole('button', { name: '取消' }))
+    await waitFor(() => expect(api.cancelOAuth).toHaveBeenCalledWith('00000000-0000-4000-8000-000000000001'))
+  })
+
   it('shows OAuth failures and starts a fresh attempt on retry', async () => {
     const api = apiFixture()
     vi.mocked(api.startOAuth)

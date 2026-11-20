@@ -629,6 +629,7 @@ function catalogFieldLabel(field: string, t: Translate): string {
     'auth.in': 'authLocation',
     'auth.name': 'authParameterName',
     'auth.helpUrl': 'howToGet',
+    'auth.flow': 'oauthFlow',
     'auth.scope': 'oauthScope',
     'auth.clientId': 'oauthClientIdentity',
     'auth.clientMetadataUrl': 'oauthClientIdentity',
@@ -663,8 +664,10 @@ function OAuthModal({
   const [phase, setPhase] = useState<OAuthPhase>('idle')
   const [attemptId, setAttemptId] = useState<string | null>(null)
   const [authorizationUrl, setAuthorizationUrl] = useState<string | null>(null)
+  const [userCode, setUserCode] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  const [codeCopied, setCodeCopied] = useState(false)
   const [account, setAccount] = useState<string | null>(null)
   const popup = useRef<Window | null>(null)
   const authorized = useRef(onAuthorized)
@@ -718,9 +721,11 @@ function OAuthModal({
   async function start(): Promise<void> {
     setError(null)
     setCopied(false)
+    setCodeCopied(false)
     setAccount(null)
     setAttemptId(null)
     setAuthorizationUrl(null)
+    setUserCode(null)
     setPhase('starting')
     try {
       popup.current = openWindow
@@ -735,6 +740,7 @@ function OAuthModal({
         : await api.startOAuth(connector.id)
       setAttemptId(started.attemptId)
       setAuthorizationUrl(started.authorizationUrl)
+      setUserCode(started.userCode ?? null)
       if (popup.current && !popup.current.closed) {
         try { popup.current.location.href = started.authorizationUrl } catch { /* Manual link remains available. */ }
       }
@@ -757,6 +763,19 @@ function OAuthModal({
     } catch (cause) {
       setCopied(false)
       setError(`${t('authorizationCopyFailed')} ${errorMessage(cause)}`)
+    }
+  }
+
+  async function copyDeviceCode(): Promise<void> {
+    if (!userCode) return
+    try {
+      if (copyText) await copyText(userCode)
+      else await navigator.clipboard.writeText(userCode)
+      setCodeCopied(true)
+      setError(null)
+    } catch (cause) {
+      setCodeCopied(false)
+      setError(`${t('deviceCodeCopyFailed')} ${errorMessage(cause)}`)
     }
   }
 
@@ -803,8 +822,9 @@ function OAuthModal({
               {phase === 'failed' ? t('retry') : t('goAuthorize')}
             </Button>
           )}
-          {phase === 'waiting' && (
-            <Button variant="primary" onClick={() => { void copyLink() }}>{t('copyAuthorizationLink')}</Button>
+          {phase === 'waiting' && (userCode
+            ? <Button variant="primary" onClick={() => { void copyDeviceCode() }}>{t('copyDeviceCode')}</Button>
+            : <Button variant="primary" onClick={() => { void copyLink() }}>{t('copyAuthorizationLink')}</Button>
           )}
           {phase === 'success' && <Button variant="primary" onClick={close}>{t('close')}</Button>}
         </div>
@@ -817,7 +837,9 @@ function OAuthModal({
         {phase === 'waiting' && (
           <>
             <p style={styles.muted}>{t('waitingOauth')}</p>
+            {userCode && <p style={styles.muted}>{t('deviceCodePrompt')} <strong>{userCode}</strong></p>}
             {popup.current === null && <p style={styles.hint}>{t('popupBlocked')}</p>}
+            {codeCopied && <p role="status" style={styles.muted}>{t('deviceCodeCopied')}</p>}
             {copied && <p role="status" style={styles.muted}>{t('authorizationLinkCopied')}</p>}
             {authorizationUrl && <a href={authorizationUrl} target="_blank" rel="noreferrer">{t('openAuthorizationPage')}</a>}
           </>

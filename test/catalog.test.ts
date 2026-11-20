@@ -52,10 +52,8 @@ describe('initial connector catalog', () => {
     })
   })
 
-  it('configures the eight new connectors with their official endpoints and credential settings', () => {
+  it('configures the API Key connectors with their official endpoints and credential settings', () => {
     const expected = {
-      qcc: ['https://agent.qcc.com/mcp/company/stream', 'header', 'Authorization', 'Bearer ${value}', 'https://agent.qcc.com/profile/api-key'],
-      github: ['https://api.githubcopilot.com/mcp/', 'header', 'Authorization', 'Bearer ${value}', 'https://github.com/settings/personal-access-tokens/new'],
       gitee: ['https://api.gitee.com/mcp', 'header', 'Authorization', 'Bearer ${value}', 'https://gitee.com/profile/personal_access_tokens'],
       'tencent-maps': ['https://mcp.map.qq.com/mcp?format=0', 'query', 'key', undefined, 'https://lbs.qq.com/dev/console/application/mine'],
       'flight-master': ['https://fly.huoli.com/mcp/dast_mcp', 'header', 'Authorization', 'Bearer ${value}', 'https://dast.133.cn/ucenter/mcp-apikey'],
@@ -73,6 +71,29 @@ describe('initial connector catalog', () => {
         },
       })
     }
+  })
+
+  it('configures Qichacha authorization code OAuth and read-only GitHub device OAuth', () => {
+    const qcc = catalog.connectors.find(item => item.id === 'qcc')
+    expect(qcc).toMatchObject({
+      remote: { type: 'streamable-http', url: 'https://agent.qcc.com/mcp/company/stream' },
+      auth: {
+        type: 'oauth', flow: 'authorization-code', scope: 'mcp:tools',
+        clientId: 'wb_dyn_K_Mw0wCNUTmAstPhhkEHeQ',
+        callbackPath: '/oauth/callback/qcc', portPolicy: 'fixed', fixedPort: 43119,
+      },
+    })
+    const github = catalog.connectors.find(item => item.id === 'github')
+    expect(github).toMatchObject({
+      remote: {
+        type: 'streamable-http', url: 'https://api.githubcopilot.com/mcp/',
+        headers: { 'X-MCP-Readonly': 'true', 'X-MCP-Toolsets': 'default' },
+      },
+      auth: {
+        type: 'oauth', flow: 'device', scope: 'repo read:org read:user offline_access',
+        clientId: 'Ov23lie6F9QRY3rJ3wmj',
+      },
+    })
   })
 
   it('configures Tencent Meeting and WeCom with fixed headers and credential injection', () => {
@@ -180,6 +201,29 @@ describe('catalog validation', () => {
     })
     expect(validateCatalog(missingPort).join('\n')).toContain('required for fixed port policy')
     expect(validateCatalog(unexpectedPort).join('\n')).toContain('not allowed for random port policy')
+  })
+
+  it('validates device OAuth without callback settings or client metadata', () => {
+    const valid = changedCatalog(value => {
+      value.connectors[0].auth = {
+        type: 'oauth', flow: 'device', scope: 'offline_access', clientId: 'shared-public-client',
+      }
+    })
+    expect(validateCatalog(valid)).toEqual([])
+
+    for (const change of [
+      auth => { auth.clientMetadataUrl = 'https://example.com/client.json' },
+      auth => { auth.callbackPath = '/oauth/callback/device' },
+      auth => { delete auth.clientId },
+    ]) {
+      const invalid = changedCatalog(value => {
+        value.connectors[0].auth = {
+          type: 'oauth', flow: 'device', scope: 'offline_access', clientId: 'shared-public-client',
+        }
+        change(value.connectors[0].auth)
+      })
+      expect(validateCatalog(invalid).length).toBeGreaterThan(0)
+    }
   })
 
   it('rejects oversized icons', () => {

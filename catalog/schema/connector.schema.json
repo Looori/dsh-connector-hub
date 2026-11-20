@@ -51,9 +51,10 @@
       "oneOf": [
         {
           "type": "object",
-          "required": ["type", "callbackPath", "portPolicy"],
+          "required": ["type"],
           "properties": {
             "type": { "const": "oauth" },
+            "flow": { "enum": ["authorization-code", "device"] },
             "scope": { "type": "string" },
             "authorizationParams": {
               "type": "object",
@@ -80,12 +81,29 @@
           },
           "oneOf": [
             {
-              "required": ["clientId"],
-              "properties": { "clientId": true }
+              "required": ["flow", "clientId"],
+              "properties": {
+                "flow": { "const": "device" },
+                "clientId": true,
+                "clientMetadataUrl": false,
+                "callbackPath": false,
+                "portPolicy": false,
+                "fixedPort": false
+              }
             },
             {
-              "required": ["clientMetadataUrl"],
-              "properties": { "clientMetadataUrl": true }
+              "required": ["callbackPath", "portPolicy"],
+              "properties": { "flow": { "const": "authorization-code" } },
+              "oneOf": [
+                {
+                  "required": ["clientId"],
+                  "properties": { "clientId": true }
+                },
+                {
+                  "required": ["clientMetadataUrl"],
+                  "properties": { "clientMetadataUrl": true }
+                }
+              ]
             }
           ]
         },

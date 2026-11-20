@@ -1,7 +1,10 @@
 import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
+import { setTimeout as delay } from 'node:timers/promises'
 import {
   auth,
+  discoverOAuthServerInfo,
+  type AuthorizationServerMetadata,
   type OAuthClientInformationContext,
   type OAuthClientMetadata,
   type OAuthClientProvider,
@@ -19,6 +22,7 @@ export const OAUTH_ATTEMPT_TIMEOUT_MS = 10 * 60 * 1000
 export interface OAuthStartResult {
   attemptId: string
   authorizationUrl: string
+  userCode?: string
 }
 
 export interface OAuthAttemptView {
@@ -40,14 +44,30 @@ interface OAuthAttempt {
   attemptId: string
   connectorId: string
   connector: StoredConnector
-  provider: SharedClientProvider
-  server: Server
+  provider?: SharedClientProvider
+  server?: Server
   abort: AbortController
   onAuthorized: (secret: OAuthSecret) => Promise<void>
   status: AttemptStatus
   error: string | null
   callbackUsed: boolean
   timer: NodeJS.Timeout
+  account?: OAuthAccount
+}
+
+interface DeviceAuthorization {
+  deviceCode: string
+  userCode: string
+  verificationUrl: string
+  intervalMs: number
+}
+
+type DeviceAuthorizationServerMetadata = AuthorizationServerMetadata & {
+  device_authorization_endpoint?: string
+}
+
+interface DeviceTokenEndpoint {
+  url: string
 }
 
 /** Owns short-lived loopback callback servers and in-memory authorization attempts. */
@@ -75,6 +95,7 @@ export class OAuthManager {
         throw new OAuthFlowError('An OAuth authorization is already in progress for this connector', 409)
       }
     }
+    if (config.flow === 'device') return this.startDevice(id, connector, onAuthorized)
 
     const attemptId = randomUUID()
     const abort = new AbortController()
@@ -128,6 +149,62 @@ export class OAuthManager {
     }
   }
 
+  private async startDevice(
+    id: string,
+    connector: StoredConnector,
+    onAuthorized: (secret: OAuthSecret) => Promise<void>,
+  ): Promise<OAuthStartResult> {
+    if (connector.auth.type !== 'oauth' || connector.auth.flow !== 'device') {
+      throw new OAuthFlowError('Connector does not use device authorization')
+    }
+    const attemptId = randomUUID()
+    const abort = new AbortController()
+    const attempt: OAuthAttempt = {
+      attemptId,
+      connectorId: id,
+      connector: structuredClone(connector),
+      abort,
+      onAuthorized,
+      status: 'waiting',
+      error: null,
+      callbackUsed: false,
+      timer: setTimeout(() => {
+        void this.fail(attempt, 'OAuth authorization timed out')
+      }, this.timeoutMs),
+    }
+    attempt.timer.unref()
+    this.attempts.set(attemptId, attempt)
+    try {
+      const discovered = await discoverOAuthServerInfo(connector.remote.url, {
+        fetchFn: (input, init) => this.fetchForAttempt(attempt, input, init),
+      })
+      const metadata: DeviceAuthorizationServerMetadata | undefined = discovered.authorizationServerMetadata
+      const deviceEndpoint = metadata?.device_authorization_endpoint
+      const tokenEndpoint = metadata?.token_endpoint
+      if (!deviceEndpoint || !tokenEndpoint) throw new Error('OAuth server does not support device authorization')
+      const response = await this.fetchForAttempt(attempt, deviceEndpoint, {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded', accept: 'application/json' },
+        body: new URLSearchParams({
+          client_id: connector.auth.clientId,
+          ...(connector.auth.scope === undefined ? {} : { scope: connector.auth.scope }),
+        }),
+      })
+      const authorization = parseDeviceAuthorization(await readResponseJson(response))
+      void this.pollDevice(attempt, authorization, { url: tokenEndpoint })
+      return {
+        attemptId,
+        authorizationUrl: authorization.verificationUrl,
+        userCode: authorization.userCode,
+      }
+    } catch (error) {
+      clearTimeout(attempt.timer)
+      this.attempts.delete(attemptId)
+      abort.abort()
+      throw error
+    }
+  }
+
   status(attemptId: string): OAuthAttemptView {
     const attempt = this.attempts.get(attemptId)
     if (!attempt) throw new OAuthFlowError('Unknown OAuth attempt', 404)
@@ -162,6 +239,52 @@ export class OAuthManager {
     }))
   }
 
+  private async pollDevice(
+    attempt: OAuthAttempt,
+    authorization: DeviceAuthorization,
+    endpoint: DeviceTokenEndpoint,
+  ): Promise<void> {
+    if (attempt.connector.auth.type !== 'oauth' || attempt.connector.auth.flow !== 'device') return
+    const clientId = attempt.connector.auth.clientId
+    let intervalMs = authorization.intervalMs
+    try {
+      while (attempt.status === 'waiting') {
+        await delay(intervalMs, undefined, { signal: attempt.abort.signal })
+        const response = await this.fetchForAttempt(attempt, endpoint.url, {
+          method: 'POST',
+          headers: { 'content-type': 'application/x-www-form-urlencoded', accept: 'application/json' },
+          body: new URLSearchParams({
+            client_id: clientId,
+            device_code: authorization.deviceCode,
+            grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
+          }),
+        })
+        const value = await readResponseJson(response)
+        const errorCode = isRecord(value) && typeof value.error === 'string' ? value.error : undefined
+        if (errorCode === 'authorization_pending') continue
+        if (errorCode === 'slow_down') {
+          intervalMs += 5_000
+          continue
+        }
+        if (errorCode === 'access_denied') throw new OAuthFlowError('OAuth authorization was denied')
+        if (errorCode === 'expired_token') throw new OAuthFlowError('OAuth device code expired')
+        if (errorCode) throw new OAuthFlowError(`OAuth device authorization failed: ${errorCode}`)
+        if (!response.ok) throw new OAuthFlowError(`OAuth token exchange failed with HTTP ${response.status}`)
+
+        attempt.status = 'completing'
+        const secret = this.toSecret(parseOAuthTokens(value), attempt.account)
+        await attempt.onAuthorized(secret)
+        attempt.status = 'success'
+        clearTimeout(attempt.timer)
+      }
+    } catch (error) {
+      if (attempt.abort.signal.aborted && attempt.status === 'failed') return
+      attempt.status = 'failed'
+      attempt.error = safeErrorMessage(error)
+      clearTimeout(attempt.timer)
+    }
+  }
+
   private async handleCallback(
     attempt: OAuthAttempt,
     request: IncomingMessage,
@@ -171,6 +294,10 @@ export class OAuthManager {
     try {
       if (request.method !== 'GET') {
         respondText(response, 405, 'Method not allowed')
+        return
+      }
+      if (!attempt.provider || !attempt.server) {
+        respondText(response, 404, 'Not found')
         return
       }
       const config = attempt.connector.auth
@@ -200,7 +327,7 @@ export class OAuthManager {
         fetchFn: (input, init) => this.fetchForAttempt(attempt, input, init),
       })
       if (result !== 'AUTHORIZED' || !attempt.provider.savedTokens) throw new Error('OAuth token exchange failed')
-      const secret = this.toSecret(attempt.provider.savedTokens, attempt.provider.account)
+      const secret = this.toSecret(attempt.provider.savedTokens, attempt.account)
       await attempt.onAuthorized(secret)
       attempt.status = 'success'
       respondText(response, 200, '已连接，可以关闭此页')
@@ -241,7 +368,7 @@ export class OAuthManager {
     if (response.ok && method.toUpperCase() === 'POST' && /\/token$/.test(url.pathname)) {
       try {
         const account = extractOAuthAccount(await response.clone().json())
-        if (account) attempt.provider.account = account
+        if (account) attempt.account = account
       } catch {
         // Account display is optional; token exchange still uses the original response.
       }
@@ -265,6 +392,50 @@ export class OAuthManager {
   }
 }
 
+async function readResponseJson(response: Response): Promise<unknown> {
+  try {
+    return await response.json()
+  } catch {
+    throw new OAuthFlowError(`OAuth server returned invalid JSON (HTTP ${response.status})`)
+  }
+}
+
+function parseDeviceAuthorization(value: unknown): DeviceAuthorization {
+  if (!isRecord(value) || typeof value.device_code !== 'string' || !value.device_code
+    || typeof value.user_code !== 'string' || !value.user_code
+    || typeof value.verification_uri !== 'string' || !value.verification_uri) {
+    throw new OAuthFlowError('OAuth device authorization response is invalid')
+  }
+  const verificationUrl = typeof value.verification_uri_complete === 'string' && value.verification_uri_complete
+    ? value.verification_uri_complete
+    : value.verification_uri
+  return {
+    deviceCode: value.device_code,
+    userCode: value.user_code,
+    verificationUrl,
+    intervalMs: typeof value.interval === 'number' && Number.isFinite(value.interval) && value.interval > 0
+      ? value.interval * 1000
+      : 5_000,
+  }
+}
+
+function parseOAuthTokens(value: unknown): StoredOAuthTokens {
+  if (!isRecord(value) || typeof value.access_token !== 'string' || !value.access_token) {
+    throw new OAuthFlowError('OAuth token response is invalid')
+  }
+  return {
+    access_token: value.access_token,
+    token_type: typeof value.token_type === 'string' ? value.token_type : 'Bearer',
+    ...(typeof value.refresh_token === 'string' ? { refresh_token: value.refresh_token } : {}),
+    ...(typeof value.expires_in === 'number' ? { expires_in: value.expires_in } : {}),
+    ...(typeof value.scope === 'string' ? { scope: value.scope } : {}),
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
+
 export class OAuthFlowError extends Error {
   constructor(message: string, readonly status = 400) {
     super(message)
@@ -279,7 +450,6 @@ class SharedClientProvider implements OAuthClientProvider {
   readonly stateValue = randomBytes(32).toString('base64url')
   authorizationUrl?: string
   savedTokens?: StoredOAuthTokens
-  account?: OAuthAccount
   private savedClient?: StoredOAuthClientInformation
   private verifier?: string
   private discovery?: OAuthDiscoveryState
@@ -368,8 +538,8 @@ function listen(server: Server, port: number): Promise<void> {
   })
 }
 
-function closeServer(server: Server): Promise<void> {
-  if (!server.listening) return Promise.resolve()
+function closeServer(server: Server | undefined): Promise<void> {
+  if (!server?.listening) return Promise.resolve()
   const closed = new Promise<void>((resolve, reject) => {
     server.close(error => error ? reject(error) : resolve())
   })

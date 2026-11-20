@@ -168,7 +168,15 @@ function validateAuth(value: unknown, id: string): void {
   if (value.type === 'oauth') {
     const identities = Number(typeof value.clientId === 'string' && value.clientId.length > 0)
       + Number(typeof value.clientMetadataUrl === 'string' && httpsUrl(value.clientMetadataUrl))
-    if (identities !== 1 || typeof value.callbackPath !== 'string' || !value.callbackPath.startsWith('/')
+    if (value.flow === 'device') {
+      if (identities !== 1 || typeof value.clientId !== 'string' || Object.hasOwn(value, 'clientMetadataUrl')
+        || Object.hasOwn(value, 'callbackPath') || Object.hasOwn(value, 'portPolicy') || Object.hasOwn(value, 'fixedPort')) {
+        throw new Error(`Catalog connector ${id} has invalid device OAuth auth`)
+      }
+      return
+    }
+    if (value.flow !== undefined && value.flow !== 'authorization-code'
+      || identities !== 1 || typeof value.callbackPath !== 'string' || !value.callbackPath.startsWith('/')
       || !['random', 'fixed'].includes(String(value.portPolicy))
       || (value.portPolicy === 'fixed' && (!Number.isInteger(value.fixedPort) || Number(value.fixedPort) < 1 || Number(value.fixedPort) > 65535))) {
       throw new Error(`Catalog connector ${id} has invalid OAuth auth`)

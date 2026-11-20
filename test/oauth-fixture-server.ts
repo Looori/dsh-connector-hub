@@ -6,6 +6,11 @@ export interface OAuthFixtureServer {
   catalog: ReturnType<typeof catalog>
   tokenRequests: URLSearchParams[]
   refreshRequests: URLSearchParams[]
+  deviceRequests: URLSearchParams[]
+  devicePollRequests: URLSearchParams[]
+  devicePollOutcomes: Array<'authorization_pending' | 'slow_down' | 'access_denied' | 'expired_token'>
+  devicePollRepeatOutcome: 'authorization_pending' | undefined
+  deviceInterval: number
   mcpRequests: Array<{ method: string, authorization: string | null, body: unknown }>
   registrationRequests: number
   revocationRequests: number
@@ -21,9 +26,11 @@ export interface OAuthFixtureServer {
 }
 
 /** Local catalog, MCP and authorization server; no external network access. */
-export async function startOAuthFixtureServer(): Promise<OAuthFixtureServer> {
+export async function startOAuthFixtureServer(options: { includeDeviceConnector?: boolean } = {}): Promise<OAuthFixtureServer> {
   const tokenRequests: URLSearchParams[] = []
   const refreshRequests: URLSearchParams[] = []
+  const deviceRequests: URLSearchParams[] = []
+  const devicePollRequests: URLSearchParams[] = []
   const mcpRequests: OAuthFixtureServer['mcpRequests'] = []
   let origin = ''
   let currentCatalog!: ReturnType<typeof catalog>
@@ -36,6 +43,11 @@ export async function startOAuthFixtureServer(): Promise<OAuthFixtureServer> {
     get catalog() { return currentCatalog },
     tokenRequests,
     refreshRequests,
+    deviceRequests,
+    devicePollRequests,
+    devicePollOutcomes: [],
+    devicePollRepeatOutcome: undefined,
+    deviceInterval: 0.001,
     mcpRequests,
     get registrationRequests() { return registrationRequests },
     get revocationRequests() { return revocationRequests },
@@ -69,15 +81,21 @@ export async function startOAuthFixtureServer(): Promise<OAuthFixtureServer> {
         issuer: origin,
         authorization_endpoint: `${origin}/authorize`,
         token_endpoint: `${origin}/token`,
+        device_authorization_endpoint: `${origin}/device/code`,
         revocation_endpoint: `${origin}/revoke`,
         registration_endpoint: `${origin}/register`,
         response_types_supported: ['code'],
-        grant_types_supported: ['authorization_code', 'refresh_token'],
+        grant_types_supported: ['authorization_code', 'refresh_token', 'urn:ietf:params:oauth:grant-type:device_code'],
         code_challenge_methods_supported: ['S256'],
         token_endpoint_auth_methods_supported: ['none'],
         client_id_metadata_document_supported: true,
         authorization_response_iss_parameter_supported: true,
       })
+      return
+    }
+    if (request.method === 'GET' && url.pathname === '/device') {
+      response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
+      response.end('<!doctype html><title>Device authorization</title><p>Enter ABCD-EFGH.</p>')
       return
     }
     if (request.method === 'GET' && url.pathname === '/authorize') {
@@ -103,9 +121,27 @@ export async function startOAuthFixtureServer(): Promise<OAuthFixtureServer> {
       response.writeHead(fixture.revocationStatus).end()
       return
     }
+    if (request.method === 'POST' && url.pathname === '/device/code') {
+      deviceRequests.push(await readForm(request))
+      respondJson(response, 200, {
+        device_code: 'device-code',
+        user_code: 'ABCD-EFGH',
+        verification_uri: `${origin}/device`,
+        interval: fixture.deviceInterval,
+        expires_in: 900,
+      })
+      return
+    }
     if (request.method === 'POST' && url.pathname === '/token') {
       const body = await readForm(request)
-      if (body.get('grant_type') === 'refresh_token') {
+      if (body.get('grant_type') === 'urn:ietf:params:oauth:grant-type:device_code') {
+        devicePollRequests.push(body)
+        const outcome = fixture.devicePollOutcomes.shift() ?? fixture.devicePollRepeatOutcome
+        if (outcome) {
+          respondJson(response, 200, { error: outcome })
+          return
+        }
+      } else if (body.get('grant_type') === 'refresh_token') {
         refreshRequests.push(body)
         if (fixture.rejectRefresh) {
           respondJson(response, 400, { error: 'invalid_grant', error_description: 'refresh token expired' })
@@ -154,7 +190,7 @@ export async function startOAuthFixtureServer(): Promise<OAuthFixtureServer> {
   const address = server.address()
   if (address === null || typeof address === 'string') throw new Error('OAuth fixture did not bind')
   origin = `http://127.0.0.1:${address.port}`
-  currentCatalog = catalog(origin)
+  currentCatalog = catalog(origin, options.includeDeviceConnector === true)
   return fixture
 }
 
@@ -167,7 +203,7 @@ interface JsonRpcMessage {
   }
 }
 
-function catalog(origin: string) {
+function catalog(origin: string, includeDeviceConnector = false) {
   return {
     schemaVersion: 1,
     revision: 'oauth-e2e.1',
@@ -185,7 +221,19 @@ function catalog(origin: string) {
         clientMetadataUrl: 'https://example.com/client.json',
         callbackPath: '/oauth/callback/notion', portPolicy: 'random',
       },
-    }],
+    }, ...(includeDeviceConnector ? [{
+      id: 'github',
+      name: { zh: '模拟设备授权', en: 'Mock Device OAuth' },
+      description: { zh: '仅用于设备授权自动化测试。', en: 'Used only by device OAuth automated tests.' },
+      icon: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciLz4=',
+      homepage: 'https://example.com',
+      publisher: 'Connector Hub Tests',
+      official: false,
+      remote: { type: 'streamable-http', url: `${origin}/mcp` },
+      auth: {
+        type: 'oauth', flow: 'device', scope: 'offline_access', clientId: 'shared-public-client',
+      },
+    }] : [])],
   }
 }
 
