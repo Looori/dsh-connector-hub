@@ -87,7 +87,7 @@ describe('initial connector catalog', () => {
     expect(github).toMatchObject({
       remote: {
         type: 'streamable-http', url: 'https://api.githubcopilot.com/mcp/',
-        headers: { 'X-MCP-Readonly': 'true', 'X-MCP-Toolsets': 'default' },
+        headers: { 'X-MCP-Readonly': 'true', 'X-MCP-Toolsets': 'repos,issues,pull_requests,context,copilot,users' },
       },
       auth: {
         type: 'oauth', flow: 'device', scope: 'repo read:org read:user offline_access',

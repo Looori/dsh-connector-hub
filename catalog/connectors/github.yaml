@@ -14,7 +14,7 @@ remote:
   url: https://api.githubcopilot.com/mcp/
   headers:
     X-MCP-Readonly: "true"
-    X-MCP-Toolsets: default
+    X-MCP-Toolsets: repos,issues,pull_requests,context,copilot,users
 auth:
   type: oauth
   flow: device

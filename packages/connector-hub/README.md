@@ -29,7 +29,7 @@ The catalog includes:
 | Baidu Map | API Key |
 | Tencent Docs | API Key |
 | Qichacha | OAuth (authorization code + PKCE) |
-| GitHub | OAuth (device flow, read-only default toolset) |
+| GitHub | OAuth (device flow, read-only selected toolsets) |
 | Gitee | API Key (personal access token) |
 | Tencent Maps | API Key |
 | Flight Master Aviation Data | API Key |
