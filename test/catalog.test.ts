@@ -18,13 +18,14 @@ function changedCatalog(change) {
 }
 
 describe('initial connector catalog', () => {
-  it('contains exactly the thirteen configured connectors in display order', () => {
+  it('contains exactly the fifteen configured connectors in display order', () => {
     expect(validateCatalog(catalog)).toEqual([])
     expect(catalog.schemaVersion).toBe(1)
-    expect(catalog.revision).toBe('2026-11-14.1')
+    expect(catalog.revision).toBe('2026-11-20.1')
     expect(catalog.connectors.map(connector => connector.id)).toEqual([
       'notion', 'xmind-cn', 'amap', 'baidu-map', 'tencent-docs',
       'qcc', 'github', 'gitee', 'tencent-maps', 'flight-master', 'didi', 'wind-stock', 'variflight',
+      'tencent-meeting', 'wecom-messaging',
     ])
   })
 
@@ -72,6 +73,31 @@ describe('initial connector catalog', () => {
         },
       })
     }
+  })
+
+  it('configures Tencent Meeting and WeCom with fixed headers and credential injection', () => {
+    const meeting = catalog.connectors.find(item => item.id === 'tencent-meeting')
+    expect(meeting).toMatchObject({
+      official: true,
+      remote: {
+        type: 'streamable-http',
+        url: 'https://mcp.meeting.tencent.com/mcp/wemeet-open/v1',
+        headers: { 'X-Skill-Version': 'v1.1.0' },
+      },
+      auth: {
+        type: 'api-key', in: 'header', name: 'X-Tencent-Meeting-Token',
+        helpUrl: 'https://meeting.tencent.com/ai-skill.html',
+      },
+    })
+    const wecom = catalog.connectors.find(item => item.id === 'wecom-messaging')
+    expect(wecom).toMatchObject({
+      official: true,
+      remote: { type: 'streamable-http', url: 'https://qyapi.weixin.qq.com/mcp/v2/bot/msg' },
+      auth: {
+        type: 'api-key', in: 'query', name: 'apikey',
+        helpUrl: 'https://work.weixin.qq.com/wework_admin/frame#/',
+      },
+    })
   })
 
   it('requires an API Key value template to contain exactly one value placeholder', () => {

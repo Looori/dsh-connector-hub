@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "revision": "2026-11-14.1",
+  "revision": "2026-11-20.1",
   "connectors": [
     {
       "id": "notion",
@@ -378,6 +378,67 @@
           "en": "MCP key"
         },
         "helpUrl": "https://cmcp.variflight.com/"
+      }
+    },
+    {
+      "id": "tencent-meeting",
+      "name": {
+        "zh": "腾讯会议",
+        "en": "Tencent Meeting"
+      },
+      "description": {
+        "zh": "预约、修改或取消会议，查询参会信息，检索有权访问的录制、转写和纪要。",
+        "en": "Schedule, update, or cancel meetings, check attendance, and retrieve authorized recordings, transcripts, and meeting notes."
+      },
+      "icon": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0OCA0OCI+PHJlY3Qgd2lkdGg9IjQ4IiBoZWlnaHQ9IjQ4IiByeD0iMTIiIGZpbGw9IiMxNjc3ZmYiLz48cGF0aCBkPSJNMTIgMTVhMyAzIDAgMCAwLTMgM3YxM2EzIDMgMCAwIDAgMyAzaDE1YTMgMyAwIDAgMCAzLTN2LTJsOSA1VjE1bC05IDV2LTJhMyAzIDAgMCAwLTMtM0gxMloiIGZpbGw9IiNmZmYiLz48cGF0aCBkPSJtMTYgMjUgNCA0IDctOCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMTY3N2ZmIiBzdHJva2Utd2lkdGg9IjIuNSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+PC9zdmc+Cg==",
+      "homepage": "https://meeting.tencent.com/",
+      "publisher": "腾讯会议",
+      "official": true,
+      "remote": {
+        "type": "streamable-http",
+        "url": "https://mcp.meeting.tencent.com/mcp/wemeet-open/v1",
+        "headers": {
+          "X-Skill-Version": "v1.1.0"
+        }
+      },
+      "auth": {
+        "type": "api-key",
+        "in": "header",
+        "name": "X-Tencent-Meeting-Token",
+        "label": {
+          "zh": "个人 Token",
+          "en": "Personal token"
+        },
+        "helpUrl": "https://meeting.tencent.com/ai-skill.html"
+      }
+    },
+    {
+      "id": "wecom-messaging",
+      "name": {
+        "zh": "企业微信（消息）",
+        "en": "WeCom Messaging"
+      },
+      "description": {
+        "zh": "按机器人和用户授权查询群聊、消息及附件，列出机器人会话并发送消息。",
+        "en": "List group chats, messages, attachments, and bot sessions, and send messages within the bot’s and user’s permissions."
+      },
+      "icon": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0OCA0OCI+PHJlY3Qgd2lkdGg9IjQ4IiBoZWlnaHQ9IjQ4IiByeD0iMTIiIGZpbGw9IiMwN2MxNjAiLz48cGF0aCBkPSJNOSAxMmE1IDUgMCAwIDAtNSA1djlhNSA1IDAgMCAwIDUgNWgzdjZsNy02aDlhNSA1IDAgMCAwIDUtNXYtOWE1IDUgMCAwIDAtNS01SDlaIiBmaWxsPSIjZmZmIi8+PHBhdGggZD0iTTI1IDI1YTUgNSAwIDAgMC01IDV2M2E1IDUgMCAwIDAgNSA1aDhsNiA1di01aDFhNSA1IDAgMCAwIDUtNXYtM2E1IDUgMCAwIDAtNS01SDI1WiIgZmlsbD0iI2I5ZjRjZiIvPjxjaXJjbGUgY3g9IjE0IiBjeT0iMjEuNSIgcj0iMiIgZmlsbD0iIzA3YzE2MCIvPjxjaXJjbGUgY3g9IjIxIiBjeT0iMjEuNSIgcj0iMiIgZmlsbD0iIzA3YzE2MCIvPjxjaXJjbGUgY3g9IjI4IiBjeT0iMjEuNSIgcj0iMiIgZmlsbD0iIzA3YzE2MCIvPjwvc3ZnPgo=",
+      "homepage": "https://work.weixin.qq.com/",
+      "publisher": "企业微信",
+      "official": true,
+      "remote": {
+        "type": "streamable-http",
+        "url": "https://qyapi.weixin.qq.com/mcp/v2/bot/msg"
+      },
+      "auth": {
+        "type": "api-key",
+        "in": "query",
+        "name": "apikey",
+        "label": {
+          "zh": "API Key",
+          "en": "API key"
+        },
+        "helpUrl": "https://work.weixin.qq.com/wework_admin/frame#/"
       }
     }
   ]

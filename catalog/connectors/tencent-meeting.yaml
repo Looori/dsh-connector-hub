@@ -1,0 +1,24 @@
+id: tencent-meeting
+name:
+  zh: 腾讯会议
+  en: Tencent Meeting
+description:
+  zh: 预约、修改或取消会议，查询参会信息，检索有权访问的录制、转写和纪要。
+  en: Schedule, update, or cancel meetings, check attendance, and retrieve authorized recordings, transcripts, and meeting notes.
+icon: data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0OCA0OCI+PHJlY3Qgd2lkdGg9IjQ4IiBoZWlnaHQ9IjQ4IiByeD0iMTIiIGZpbGw9IiMxNjc3ZmYiLz48cGF0aCBkPSJNMTIgMTVhMyAzIDAgMCAwLTMgM3YxM2EzIDMgMCAwIDAgMyAzaDE1YTMgMyAwIDAgMCAzLTN2LTJsOSA1VjE1bC05IDV2LTJhMyAzIDAgMCAwLTMtM0gxMloiIGZpbGw9IiNmZmYiLz48cGF0aCBkPSJtMTYgMjUgNCA0IDctOCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMTY3N2ZmIiBzdHJva2Utd2lkdGg9IjIuNSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+PC9zdmc+Cg==
+homepage: https://meeting.tencent.com/
+publisher: 腾讯会议
+official: true
+remote:
+  type: streamable-http
+  url: https://mcp.meeting.tencent.com/mcp/wemeet-open/v1
+  headers:
+    X-Skill-Version: v1.1.0
+auth:
+  type: api-key
+  in: header
+  name: X-Tencent-Meeting-Token
+  label:
+    zh: 个人 Token
+    en: Personal token
+  helpUrl: https://meeting.tencent.com/ai-skill.html

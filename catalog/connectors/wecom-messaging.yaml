@@ -1,0 +1,22 @@
+id: wecom-messaging
+name:
+  zh: 企业微信（消息）
+  en: WeCom Messaging
+description:
+  zh: 按机器人和用户授权查询群聊、消息及附件，列出机器人会话并发送消息。
+  en: List group chats, messages, attachments, and bot sessions, and send messages within the bot’s and user’s permissions.
+icon: data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0OCA0OCI+PHJlY3Qgd2lkdGg9IjQ4IiBoZWlnaHQ9IjQ4IiByeD0iMTIiIGZpbGw9IiMwN2MxNjAiLz48cGF0aCBkPSJNOSAxMmE1IDUgMCAwIDAtNSA1djlhNSA1IDAgMCAwIDUgNWgzdjZsNy02aDlhNSA1IDAgMCAwIDUtNXYtOWE1IDUgMCAwIDAtNS01SDlaIiBmaWxsPSIjZmZmIi8+PHBhdGggZD0iTTI1IDI1YTUgNSAwIDAgMC01IDV2M2E1IDUgMCAwIDAgNSA1aDhsNiA1di01aDFhNSA1IDAgMCAwIDUtNXYtM2E1IDUgMCAwIDAtNS01SDI1WiIgZmlsbD0iI2I5ZjRjZiIvPjxjaXJjbGUgY3g9IjE0IiBjeT0iMjEuNSIgcj0iMiIgZmlsbD0iIzA3YzE2MCIvPjxjaXJjbGUgY3g9IjIxIiBjeT0iMjEuNSIgcj0iMiIgZmlsbD0iIzA3YzE2MCIvPjxjaXJjbGUgY3g9IjI4IiBjeT0iMjEuNSIgcj0iMiIgZmlsbD0iIzA3YzE2MCIvPjwvc3ZnPgo=
+homepage: https://work.weixin.qq.com/
+publisher: 企业微信
+official: true
+remote:
+  type: streamable-http
+  url: https://qyapi.weixin.qq.com/mcp/v2/bot/msg
+auth:
+  type: api-key
+  in: query
+  name: apikey
+  label:
+    zh: API Key
+    en: API key
+  helpUrl: https://work.weixin.qq.com/wework_admin/frame#/
