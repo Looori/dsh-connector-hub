@@ -50,6 +50,21 @@ describe('connector config parsing and migration', () => {
     }
   })
 
+  it('accepts public fixed headers and rejects reserved or malformed header configuration', () => {
+    const valid = configWith('amap')
+    valid.connectors.amap.remote.headers = { 'X-Skill-Version': 'v1.1.0' }
+    expect(parseConnectorConfig(valid)).toEqual(valid)
+
+    for (const name of ['Authorization', 'Cookie', 'X-Connector-Hub-Key', 'Content-Length', 'Mcp-Session-Id']) {
+      const invalid = configWith('amap')
+      invalid.connectors.amap.remote.headers = { [name]: 'forbidden' }
+      expect(() => parseConnectorConfig(invalid)).toThrow('invalid or reserved header name')
+    }
+    const malformed = configWith('amap')
+    malformed.connectors.amap.remote.headers = { 'X-Public': 42 }
+    expect(() => parseConnectorConfig(malformed)).toThrow('values must be non-empty strings')
+  })
+
   it('rejects malformed entries and credentials without echoing secret values', () => {
     const malformed = configWith('notion')
     malformed.connectors.notion.enabled = 'yes'

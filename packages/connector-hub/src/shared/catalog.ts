@@ -6,6 +6,7 @@ export interface LocalizedText {
 export interface RemoteConfig {
   type: 'streamable-http'
   url: string
+  headers?: Record<string, string>
 }
 
 export interface OAuthAuthBase {

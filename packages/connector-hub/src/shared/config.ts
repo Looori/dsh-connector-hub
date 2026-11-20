@@ -3,6 +3,13 @@ import type { AuthConfig, RemoteConfig } from './catalog'
 export const CONNECTOR_CONFIG_VERSION = 1
 export const CONNECTOR_ID_PATTERN = /^[a-z0-9-]{1,24}$/
 
+const HEADER_NAME_PATTERN = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/
+const FORBIDDEN_REMOTE_HEADERS = new Set([
+  'accept', 'authorization', 'connection', 'content-encoding', 'content-length', 'content-type', 'cookie',
+  'host', 'keep-alive', 'last-event-id', 'mcp-protocol-version', 'mcp-session-id', 'proxy-authenticate',
+  'proxy-authorization', 'te', 'trailer', 'transfer-encoding', 'upgrade', 'x-connector-hub-key',
+])
+
 export interface StoredConnector {
   catalogRevision: string
   remote: RemoteConfig
@@ -105,6 +112,18 @@ function validateRemote(remote: unknown, path: string): void {
   }
   const loopbackHttp = url.protocol === 'http:' && ['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname)
   if (url.protocol !== 'https:' && !loopbackHttp) throw invalid(`${path}.remote.url must use HTTPS`)
+  if (remote.headers === undefined) return
+  if (!isRecord(remote.headers) || Object.keys(remote.headers).length > 16) {
+    throw invalid(`${path}.remote.headers must be an object with at most 16 entries`)
+  }
+  for (const [name, value] of Object.entries(remote.headers)) {
+    if (!HEADER_NAME_PATTERN.test(name) || FORBIDDEN_REMOTE_HEADERS.has(name.toLowerCase())) {
+      throw invalid(`${path}.remote.headers contains an invalid or reserved header name`)
+    }
+    if (typeof value !== 'string' || value.length === 0 || value.length > 4096) {
+      throw invalid(`${path}.remote.headers values must be non-empty strings of at most 4096 characters`)
+    }
+  }
 }
 
 function assertNoSecrets(value: unknown, path: string): void {

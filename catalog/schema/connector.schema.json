@@ -32,6 +32,18 @@
         "url": {
           "type": "string",
           "format": "uri"
+        },
+        "headers": {
+          "type": "object",
+          "maxProperties": 16,
+          "propertyNames": {
+            "pattern": "^[!#$%&'*+\\-.^_`|~0-9A-Za-z]+$"
+          },
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096
+          }
         }
       }
     },

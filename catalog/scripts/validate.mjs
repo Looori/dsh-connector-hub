@@ -21,6 +21,12 @@ const FORBIDDEN_KEYS = new Set([
   'password',
   'registrationaccesstoken',
 ])
+const HEADER_NAME_PATTERN = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/
+const FORBIDDEN_REMOTE_HEADERS = new Set([
+  'accept', 'authorization', 'connection', 'content-encoding', 'content-length', 'content-type', 'cookie',
+  'host', 'keep-alive', 'last-event-id', 'mcp-protocol-version', 'mcp-session-id', 'proxy-authenticate',
+  'proxy-authorization', 'te', 'trailer', 'transfer-encoding', 'upgrade', 'x-connector-hub-key',
+])
 
 /** Validate a single catalog entry without exposing its values in errors. */
 export function validateConnector(connector, options = {}) {
@@ -71,6 +77,13 @@ function connectorRuleErrors(connector, path, options) {
 
   if (isRecord(connector.remote) && typeof connector.remote.url === 'string') {
     validateRemoteUrl(connector.remote.url, `${path}.remote.url`, options, errors)
+  }
+  if (isRecord(connector.remote) && isRecord(connector.remote.headers)) {
+    for (const name of Object.keys(connector.remote.headers)) {
+      if (!HEADER_NAME_PATTERN.test(name) || FORBIDDEN_REMOTE_HEADERS.has(name.toLowerCase())) {
+        errors.push(`${path}.remote.headers: invalid or reserved header name`)
+      }
+    }
   }
 
   if (isRecord(connector.auth) && connector.auth.type === 'oauth') {

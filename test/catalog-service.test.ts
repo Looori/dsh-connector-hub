@@ -11,13 +11,13 @@ afterEach(async () => {
 })
 
 describe('CatalogService', () => {
-  it('uses the v2 channel and an independent cache by default', async () => {
+  it('uses the v3 channel and an independent cache by default', async () => {
     const home = await temporaryHome()
     const fetchImpl = vi.fn(async () => Response.json(catalog()))
     const service = new CatalogService({ dshHome: home, snapshot: catalog('snapshot'), fetchImpl })
 
-    expect(DEFAULT_CATALOG_URL).toBe('https://looori.github.io/dsh-connector-hub/catalog/v2/index.json')
-    expect(service.cachePath).toBe(join(home, 'connector-hub', 'cache', 'catalog-v2.json'))
+    expect(DEFAULT_CATALOG_URL).toBe('https://looori.github.io/dsh-connector-hub/catalog/v3/index.json')
+    expect(service.cachePath).toBe(join(home, 'connector-hub', 'cache', 'catalog-v3.json'))
     await service.load()
     expect(fetchImpl).toHaveBeenCalledWith(DEFAULT_CATALOG_URL, expect.anything())
   })

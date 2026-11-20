@@ -87,6 +87,22 @@ describe('CredentialGateway', () => {
     expect(fixture.requests[0].headers.ak).toBe(expected)
   })
 
+  it('injects public fixed headers on credentialed upstream requests', async () => {
+    const fixture = await startFixture('header', {
+      remoteHeaders: { 'X-Skill-Version': 'v1.1.0', 'X-Public-Constant': 'fixed' },
+    })
+    const endpoint = fixture.gateway.endpoint('test')
+    await fetch(endpoint.url, {
+      method: 'POST', headers: endpoint.headers, body: '{}',
+    })
+
+    const request = fixture.requests[0]
+    expect(request.headers['x-skill-version']).toBe('v1.1.0')
+    expect(request.headers['x-public-constant']).toBe('fixed')
+    expect(request.headers.ak).toBe('api-secret')
+    expect(request.headers['x-connector-hub-key']).toBeUndefined()
+  })
+
   it('applies a value template to only the configured query credential', async () => {
     const fixture = await startFixture('query', { valueTemplate: 'Key ${value}' })
     const endpoint = fixture.gateway.endpoint('test')
@@ -253,7 +269,10 @@ async function startFixture(mode, options = {}) {
   const remoteUrl = `http://${upstreamHost}:${upstream.address().port}/mcp?org=1`
   const connector = {
     catalogRevision: '2026-11-03.1',
-    remote: { type: 'streamable-http', url: remoteUrl },
+    remote: {
+      type: 'streamable-http', url: remoteUrl,
+      ...(options.remoteHeaders === undefined ? {} : { headers: options.remoteHeaders }),
+    },
     auth: {
       ...authConfig(mode),
       ...(options.valueTemplate === undefined ? {} : { valueTemplate: options.valueTemplate }),

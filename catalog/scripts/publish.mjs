@@ -5,11 +5,11 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { buildCatalog } from './build.mjs'
 
 const defaultSiteRoot = fileURLToPath(new URL('../../../looori.github.io/', import.meta.url))
-const channels = new Set(['v1', 'v2'])
+const channels = new Set(['v1', 'v2', 'v3'])
 
 /** Build and copy the catalog into a site checkout. Never commits or pushes. */
 export async function publishCatalog(options = {}) {
-  const channel = options.channel ?? 'v2'
+  const channel = options.channel ?? 'v3'
   if (!channels.has(channel)) throw new Error(`Unsupported catalog channel: ${channel}`)
   const build = await buildCatalog(options)
   const siteRoot = resolve(options.siteRoot ?? defaultSiteRoot)
@@ -47,7 +47,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
     const siteRoot = targetFlag === -1 ? undefined : process.argv[targetFlag + 1]
     const channel = channelFlag === -1 ? undefined : process.argv[channelFlag + 1]
     if (targetFlag !== -1 && !siteRoot) throw new Error('--target requires a site checkout path')
-    if (channelFlag !== -1 && !channel) throw new Error('--channel requires v1 or v2')
+    if (channelFlag !== -1 && !channel) throw new Error('--channel requires v1, v2 or v3')
     const result = await publishCatalog({ siteRoot, channel })
     console.log(`Prepared catalog ${result.revision} with connectors: ${result.ids.join(', ')}`)
     console.log(`Site file: ${result.outputPath}`)

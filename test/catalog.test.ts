@@ -88,6 +88,20 @@ describe('initial connector catalog', () => {
     }
   })
 
+  it('allows public fixed headers but rejects reserved header names and malformed values', () => {
+    const valid = changedCatalog(value => {
+      value.connectors[4].remote.headers = { 'X-Skill-Version': 'v1.1.0' }
+    })
+    expect(validateCatalog(valid)).toEqual([])
+
+    for (const headers of [{ Authorization: 'secret' }, { Cookie: 'session' }, { 'X-Public': 42 }]) {
+      const invalid = changedCatalog(value => {
+        value.connectors[4].remote.headers = headers
+      })
+      expect(validateCatalog(invalid).length).toBeGreaterThan(0)
+    }
+  })
+
   it('allows unknown non-sensitive fields for forward compatibility', () => {
     const value = changedCatalog(value => {
       value.connectors[0].futureField = { enabled: true }

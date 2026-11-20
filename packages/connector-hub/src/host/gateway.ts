@@ -105,6 +105,7 @@ export class CredentialGateway {
 
       const upstream = new URL(connector.remote.url)
       const headers = forwardedHeaders(request)
+      for (const [name, value] of Object.entries(connector.remote.headers ?? {})) headers.set(name, value)
       const body = method === 'GET' ? undefined : await readBody(request)
       const credential = await this.injectCredential(route.id, connector, upstream, headers)
 

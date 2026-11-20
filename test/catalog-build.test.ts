@@ -51,13 +51,16 @@ describe('catalog build', () => {
 })
 
 describe('catalog publishing', () => {
-  it('writes the v2 JSON by default without replacing v1', async () => {
+  it('writes the v3 JSON by default without replacing v1 or v2', async () => {
     const fixture = await makeFixture()
     const site = await temporaryDirectory('connector-hub-site-')
     await mkdir(resolve(site, '.git'))
     const v1Path = resolve(site, 'dsh-connector-hub/catalog/v1/index.json')
+    const v2Path = resolve(site, 'dsh-connector-hub/catalog/v2/index.json')
     await mkdir(resolve(site, 'dsh-connector-hub/catalog/v1'), { recursive: true })
+    await mkdir(resolve(site, 'dsh-connector-hub/catalog/v2'), { recursive: true })
     await writeFile(v1Path, 'existing-v1\n', 'utf8')
+    await writeFile(v2Path, 'existing-v2\n', 'utf8')
 
     const result = await publishCatalog({
       siteRoot: site,
@@ -66,16 +69,17 @@ describe('catalog publishing', () => {
     })
     const published = JSON.parse(await readFile(result.outputPath, 'utf8'))
     expect(validateCatalog(published)).toEqual([])
-    expect(result.outputPath).toBe(resolve(site, 'dsh-connector-hub/catalog/v2/index.json'))
+    expect(result.outputPath).toBe(resolve(site, 'dsh-connector-hub/catalog/v3/index.json'))
     expect(result.revision).toBe('2026-11-14.1')
     expect(result.ids).toEqual([
       'notion', 'xmind-cn', 'amap', 'baidu-map', 'tencent-docs',
       'qcc', 'github', 'gitee', 'tencent-maps', 'flight-master', 'didi', 'wind-stock', 'variflight',
     ])
     expect(await readFile(v1Path, 'utf8')).toBe('existing-v1\n')
+    expect(await readFile(v2Path, 'utf8')).toBe('existing-v2\n')
   })
 
-  it('supports an explicitly selected v1 output and rejects unknown channels', async () => {
+  it('supports explicitly selected legacy outputs and rejects unknown channels', async () => {
     const fixture = await makeFixture()
     const site = await temporaryDirectory('connector-hub-site-v1-')
     await mkdir(resolve(site, '.git'))
@@ -87,11 +91,18 @@ describe('catalog publishing', () => {
       channel: 'v1',
     })
     expect(result.outputPath).toBe(resolve(site, 'dsh-connector-hub/catalog/v1/index.json'))
+    const v2 = await publishCatalog({
+      siteRoot: site,
+      sourceRoot: fixture.source,
+      snapshotPath: fixture.snapshot,
+      channel: 'v2',
+    })
+    expect(v2.outputPath).toBe(resolve(site, 'dsh-connector-hub/catalog/v2/index.json'))
     await expect(publishCatalog({
       siteRoot: site,
       sourceRoot: fixture.source,
       snapshotPath: fixture.snapshot,
-      channel: 'v3',
+      channel: 'v4',
     })).rejects.toThrow('Unsupported catalog channel')
   })
 
