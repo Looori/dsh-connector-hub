@@ -28,14 +28,18 @@ The catalog includes:
 | Amap | API Key |
 | Baidu Map | API Key |
 | Tencent Docs | API Key |
-| Qichacha | API Key |
-| GitHub | API Key (personal access token) |
+| Qichacha | OAuth (authorization code + PKCE) |
+| GitHub | OAuth (device flow, read-only default toolset) |
 | Gitee | API Key (personal access token) |
 | Tencent Maps | API Key |
 | Flight Master Aviation Data | API Key |
 | DiDi | API Key |
 | Wind Stock Data | API Key |
 | VariFlight | API Key |
+| Tencent Meeting | Personal token |
+| WeCom Messaging | API Key |
+
+GitHub uses device authorization and shows a one-time code in the authorization dialog. Existing Qichacha and GitHub API Key connections keep working unchanged until you explicitly apply the catalog update and complete OAuth. Cancelling or failing that authorization preserves the previous connection and credential.
 
 Enter the raw credential shown by the provider. For services that require Bearer authentication, the gateway adds the prefix and avoids duplicating it if already present.
 
