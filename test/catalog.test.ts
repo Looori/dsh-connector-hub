@@ -79,6 +79,7 @@ describe('initial connector catalog', () => {
       remote: { type: 'streamable-http', url: 'https://agent.qcc.com/mcp/company/stream' },
       auth: {
         type: 'oauth', flow: 'authorization-code', scope: 'mcp:tools',
+        authorizationParams: { resource: 'https://agent.qcc.com/mcp/company/stream' },
         clientId: 'wb_dyn_K_Mw0wCNUTmAstPhhkEHeQ',
         callbackPath: '/oauth/callback/qcc', portPolicy: 'fixed', fixedPort: 43119,
       },
