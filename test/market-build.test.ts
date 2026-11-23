@@ -25,18 +25,20 @@ describe('plugin market build', () => {
     expect(first.json.endsWith('\n')).toBe(true)
   })
 
-  it('lists exactly the release recorded for the current package version', async () => {
+  it('lists all recorded releases newest first', async () => {
     const { index } = await buildMarketIndex()
     const manifest = JSON.parse(await readFile(fileURLToPath(new URL('../packages/connector-hub/package.json', import.meta.url)), 'utf8'))
     const releases = JSON.parse(await readFile(resolve(sourceRoot, 'releases.json'), 'utf8'))
     const plugin = index.plugins[0]
     expect(plugin.name).toBe(manifest.name)
-    expect(plugin.versions).toEqual([{
-      version: manifest.version,
-      publishTimestamp: releases[manifest.name][manifest.version].publishTimestamp,
-      source: { type: 'npm' },
-      engines: { dsh: manifest.engines.dsh },
-    }])
+    expect(plugin.versions).toEqual(Object.entries(releases[manifest.name])
+      .map(([version, release]) => ({
+        version,
+        publishTimestamp: release.publishTimestamp,
+        source: { type: 'npm' },
+        engines: { dsh: manifest.engines.dsh },
+      }))
+      .sort((left, right) => right.publishTimestamp - left.publishTimestamp || left.version.localeCompare(right.version)))
   })
 
   it('refuses to build when the current version has no recorded release', async () => {
@@ -68,7 +70,11 @@ describe('plugin market publishing', () => {
 
     const result = await publishMarketIndex({ ...fixture.options, siteRoot: site })
 
-    expect(result.plugins).toEqual([{ name: 'dsh-connector-hub', versions: ['0.2.0'] }])
+    const releases = JSON.parse(await readFile(fixture.releases, 'utf8'))
+    const versions = Object.entries(releases['dsh-connector-hub'])
+      .sort(([, left], [, right]) => right.publishTimestamp - left.publishTimestamp)
+      .map(([version]) => version)
+    expect(result.plugins).toEqual([{ name: 'dsh-connector-hub', versions }])
     const published = await readFile(resolve(site, 'dsh-connector-hub/plugin/index.json'), 'utf8')
     expect(published).toBe(await readFile(resolve(fixture.options.sourceRoot, 'index.json'), 'utf8'))
     expect(await readFile(resolve(site, 'dsh-connector-hub/plugin/icons/connector-hub.svg'), 'utf8')).toContain('<svg')
