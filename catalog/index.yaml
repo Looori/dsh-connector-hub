@@ -1,5 +1,5 @@
 schemaVersion: 1
-revision: 2026-11-20.1
+revision: 2026-11-24.1
 connectors:
   - notion
   - xmind-cn
@@ -16,3 +16,4 @@ connectors:
   - variflight
   - tencent-meeting
   - wecom-messaging
+  - kuaidi100

@@ -18,14 +18,14 @@ function changedCatalog(change) {
 }
 
 describe('initial connector catalog', () => {
-  it('contains exactly the fifteen configured connectors in display order', () => {
+  it('contains exactly the sixteen configured connectors in display order', () => {
     expect(validateCatalog(catalog)).toEqual([])
     expect(catalog.schemaVersion).toBe(1)
-    expect(catalog.revision).toBe('2026-11-20.1')
+    expect(catalog.revision).toBe('2026-11-24.1')
     expect(catalog.connectors.map(connector => connector.id)).toEqual([
       'notion', 'xmind-cn', 'amap', 'baidu-map', 'tencent-docs',
       'qcc', 'github', 'gitee', 'tencent-maps', 'flight-master', 'didi', 'wind-stock', 'variflight',
-      'tencent-meeting', 'wecom-messaging',
+      'tencent-meeting', 'wecom-messaging', 'kuaidi100',
     ])
   })
 
@@ -58,6 +58,7 @@ describe('initial connector catalog', () => {
       'tencent-maps': ['https://mcp.map.qq.com/mcp?format=0', 'query', 'key', undefined, 'https://lbs.qq.com/dev/console/application/mine'],
       'flight-master': ['https://fly.huoli.com/mcp/dast_mcp', 'header', 'Authorization', 'Bearer ${value}', 'https://dast.133.cn/ucenter/mcp-apikey'],
       didi: ['https://mcp.didichuxing.com/mcp-servers', 'query', 'key', undefined, 'https://mcp.didichuxing.com/'],
+      kuaidi100: ['https://api.kuaidi100.com/mcp/streamable', 'query', 'key', undefined, 'https://api.kuaidi100.com/document/how-to-use-mcp-service'],
       'wind-stock': ['https://mcp.wind.com.cn/vserver_stock_data/mcp/', 'header', 'Authorization', 'Bearer ${value}', 'https://market.windalice.com/#/user/overview'],
       variflight: ['https://c-gw.variflight.com/chat_message/mcp/api', 'header', 'Authorization', 'Bearer ${value}', 'https://cmcp.variflight.com/'],
     }
