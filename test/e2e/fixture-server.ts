@@ -5,6 +5,7 @@ export const CONNECTOR_ID = 'mock-api-key'
 export const BEARER_CONNECTOR_ID = 'mock-bearer'
 export const TENCENT_MAPS_CONNECTOR_ID = 'tencent-maps'
 export const KUAIDI100_CONNECTOR_ID = 'kuaidi100'
+export const CNKI_LAW_CONNECTOR_ID = 'cnki-law'
 export const TENCENT_MEETING_CONNECTOR_ID = 'tencent-meeting'
 export const WECOM_CONNECTOR_ID = 'wecom-messaging'
 
@@ -19,6 +20,7 @@ export interface FixtureServer {
     key: string | null
     apikey: string | null
     authorization: string | undefined
+    mcpKey: string | undefined
     meetingToken: string | undefined
     skillVersion: string | undefined
   }[]
@@ -36,7 +38,7 @@ export async function startFixtureServer(): Promise<FixtureServer> {
       respondJson(response, 200, currentCatalog)
       return
     }
-    if (!['/mcp', '/v2/mcp', '/bearer/mcp', '/tencent/mcp', '/kuaidi100/mcp', '/meeting/mcp', '/wecom/mcp'].includes(url.pathname)) {
+    if (!['/mcp', '/v2/mcp', '/bearer/mcp', '/tencent/mcp', '/kuaidi100/mcp', '/cnki/mcp', '/meeting/mcp', '/wecom/mcp'].includes(url.pathname)) {
       respondJson(response, 404, { error: 'Not found' })
       return
     }
@@ -47,6 +49,7 @@ export async function startFixtureServer(): Promise<FixtureServer> {
       key: url.searchParams.get('key'),
       apikey: url.searchParams.get('apikey'),
       authorization: request.headers.authorization,
+      mcpKey: request.headers['x-mcp-key'],
       meetingToken: request.headers['x-tencent-meeting-token'],
       skillVersion: request.headers['x-skill-version'],
     })
@@ -57,6 +60,8 @@ export async function startFixtureServer(): Promise<FixtureServer> {
       authorized = url.searchParams.get('key') === TEST_API_KEY && url.searchParams.get('format') === '0'
     } else if (url.pathname === '/kuaidi100/mcp') {
       authorized = url.searchParams.get('key') === TEST_API_KEY
+    } else if (url.pathname === '/cnki/mcp') {
+      authorized = request.headers['x-mcp-key'] === TEST_API_KEY && request.headers.authorization === undefined
     } else if (url.pathname === '/meeting/mcp') {
       authorized = request.headers['x-tencent-meeting-token'] === TEST_API_KEY
         && request.headers['x-skill-version'] === 'v1.1.0'
@@ -164,6 +169,20 @@ function catalog(origin: string) {
         type: 'api-key', in: 'query', name: 'key',
         label: { zh: '企业授权 Key', en: 'Enterprise API Key' },
         helpUrl: 'https://api.kuaidi100.com/document/how-to-use-mcp-service',
+      },
+    }, {
+      id: CNKI_LAW_CONNECTOR_ID,
+      name: { zh: '模拟中国知网法律', en: 'Mock CNKI Law' },
+      description: { zh: '仅用于自动化测试。', en: 'Used only by automated tests.' },
+      icon: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciLz4=',
+      homepage: 'https://mcp.cnki.net/guide',
+      publisher: 'Connector Hub Tests',
+      official: false,
+      remote: { type: 'streamable-http', url: `${origin}/cnki/mcp` },
+      auth: {
+        type: 'api-key', in: 'header', name: 'X-MCP-Key',
+        label: { zh: 'MCP Key', en: 'MCP Key' },
+        helpUrl: 'https://mcp.cnki.net/guide',
       },
     }, {
       id: TENCENT_MEETING_CONNECTOR_ID,
