@@ -9,6 +9,7 @@ import {
   BEARER_CONNECTOR_ID,
   CONNECTOR_ID,
   TENCENT_MAPS_CONNECTOR_ID,
+  KUAIDI100_CONNECTOR_ID,
   TENCENT_MEETING_CONNECTOR_ID,
   WECOM_CONNECTOR_ID,
   TEST_API_KEY,
@@ -97,7 +98,7 @@ it('runs the API Key lifecycle through real DSH routes and the browser UI', { ti
     const catalog = await request('/api/connector-hub/catalog')
     expect(catalog.status).toBe(200)
     expect(catalog.body).toMatchObject({ source: 'network', stale: false })
-    expect(catalog.body.catalog.connectors).toHaveLength(5)
+    expect(catalog.body.catalog.connectors).toHaveLength(6)
     expect(catalog.body.catalog.connectors[0].id).toBe(CONNECTOR_ID)
 
     const rejected = await request('/api/connector-hub/api-key-connect', 'POST', { id: CONNECTOR_ID, key: 'wrong-key' })
@@ -164,12 +165,26 @@ it('runs the API Key lifecycle through real DSH routes and the browser UI', { ti
     expect(await readFile(configPath, 'utf8')).not.toContain(TEST_API_KEY)
     expect(await readFile(journal, 'utf8')).toContain(`delete true dsh-connector-hub ${CONNECTOR_ID}`)
 
-    for (const id of [BEARER_CONNECTOR_ID, TENCENT_MAPS_CONNECTOR_ID, TENCENT_MEETING_CONNECTOR_ID, WECOM_CONNECTOR_ID]) {
+    for (const id of [
+      BEARER_CONNECTOR_ID,
+      TENCENT_MAPS_CONNECTOR_ID,
+      KUAIDI100_CONNECTOR_ID,
+      TENCENT_MEETING_CONNECTOR_ID,
+      WECOM_CONNECTOR_ID,
+    ]) {
+      const wrongKey = `wrong-${id}-key`
+      const variantRejected = await request('/api/connector-hub/api-key-connect', 'POST', { id, key: wrongKey })
+      expect(variantRejected.status).toBe(400)
+      expect(JSON.stringify(variantRejected.body)).not.toContain(wrongKey)
+      expect((await request('/api/connector-hub/connectors')).body).toEqual([])
+      expect(await readIfPresent(journal)).not.toContain(`set dsh-connector-hub ${id}`)
+
       const before = fixture.requestDetails.length
       const variantAdded = await request('/api/connector-hub/api-key-connect', 'POST', { id, key: TEST_API_KEY })
       expect(variantAdded.status).toBe(200)
       expect(variantAdded.body).toMatchObject({ id, status: 'connected', enabled: true })
       expect(variantAdded.body.tools).toContain(`mcp__${id}__echo`)
+      expect(JSON.stringify(variantAdded.body)).not.toContain(TEST_API_KEY)
 
       const variantProbe = await request('/api/connector-hub/probe', 'POST', { id })
       expect(variantProbe.status).toBe(200)
@@ -185,6 +200,8 @@ it('runs the API Key lifecycle through real DSH routes and the browser UI', { ti
         expect(variantRequests.every(item => item.authorization === `Bearer ${TEST_API_KEY}`)).toBe(true)
       } else if (id === TENCENT_MAPS_CONNECTOR_ID) {
         expect(variantRequests.every(item => item.format === '0' && item.key === TEST_API_KEY)).toBe(true)
+      } else if (id === KUAIDI100_CONNECTOR_ID) {
+        expect(variantRequests.every(item => item.key === TEST_API_KEY && item.format === null && item.apikey === null)).toBe(true)
       } else if (id === TENCENT_MEETING_CONNECTOR_ID) {
         expect(variantRequests.every(item => item.meetingToken === TEST_API_KEY && item.skillVersion === 'v1.1.0')).toBe(true)
       } else {
@@ -196,6 +213,8 @@ it('runs the API Key lifecycle through real DSH routes and the browser UI', { ti
     }
     expect((await request('/api/connector-hub/connectors')).body).toEqual([])
     expect(await readFile(configPath, 'utf8')).not.toContain(TEST_API_KEY)
+    expect(web.logs()).not.toContain(TEST_API_KEY)
+    expect(web.logs()).not.toContain(`wrong-${KUAIDI100_CONNECTOR_ID}-key`)
 
     browser = await chromium.launch({
       headless: true,
