@@ -18,14 +18,14 @@ function changedCatalog(change) {
 }
 
 describe('initial connector catalog', () => {
-  it('contains exactly the sixteen configured connectors in display order', () => {
+  it('contains exactly the eighteen configured connectors in display order', () => {
     expect(validateCatalog(catalog)).toEqual([])
     expect(catalog.schemaVersion).toBe(1)
-    expect(catalog.revision).toBe('2026-11-24.1')
+    expect(catalog.revision).toBe('2026-11-25.1')
     expect(catalog.connectors.map(connector => connector.id)).toEqual([
       'notion', 'xmind-cn', 'amap', 'baidu-map', 'tencent-docs',
       'qcc', 'github', 'gitee', 'tencent-maps', 'flight-master', 'didi', 'wind-stock', 'variflight',
-      'tencent-meeting', 'wecom-messaging', 'kuaidi100',
+      'tencent-meeting', 'wecom-messaging', 'kuaidi100', 'ifind-mcp', 'tencent-weiyun',
     ])
   })
 
@@ -59,6 +59,8 @@ describe('initial connector catalog', () => {
       'flight-master': ['https://fly.huoli.com/mcp/dast_mcp', 'header', 'Authorization', 'Bearer ${value}', 'https://dast.133.cn/ucenter/mcp-apikey'],
       didi: ['https://mcp.didichuxing.com/mcp-servers', 'query', 'key', undefined, 'https://mcp.didichuxing.com/'],
       kuaidi100: ['https://api.kuaidi100.com/mcp/streamable', 'query', 'key', undefined, 'https://api.kuaidi100.com/document/how-to-use-mcp-service'],
+      'ifind-mcp': ['https://api-mcp.51ifind.com:8643/ds-mcp-servers/hexin-ifind-ds-mcp', 'header', 'Authorization', undefined, 'https://mcp.51ifind.com/#/documents/guide-prepare'],
+      'tencent-weiyun': ['https://www.weiyun.com/api/v3/mcpserver', 'header', 'WyHeader', 'mcp_token=${value}', 'https://www.weiyun.com/act/openclaw'],
       'wind-stock': ['https://mcp.wind.com.cn/vserver_stock_data/mcp/', 'header', 'Authorization', 'Bearer ${value}', 'https://market.windalice.com/#/user/overview'],
       variflight: ['https://c-gw.variflight.com/chat_message/mcp/api', 'header', 'Authorization', 'Bearer ${value}', 'https://cmcp.variflight.com/'],
     }
@@ -72,6 +74,9 @@ describe('initial connector catalog', () => {
         },
       })
     }
+    expect(catalog.connectors.find(item => item.id === 'tencent-weiyun')?.remote.probe).toEqual({
+      tool: 'weiyun.list', arguments: { limit: 1 },
+    })
   })
 
   it('configures Qichacha authorization code OAuth and read-only GitHub device OAuth', () => {

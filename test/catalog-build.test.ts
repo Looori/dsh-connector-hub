@@ -25,7 +25,7 @@ describe('catalog build', () => {
     expect(first.catalog.connectors.map(connector => connector.id)).toEqual([
       'notion', 'xmind-cn', 'amap', 'baidu-map', 'tencent-docs',
       'qcc', 'github', 'gitee', 'tencent-maps', 'flight-master', 'didi', 'wind-stock', 'variflight',
-      'tencent-meeting', 'wecom-messaging', 'kuaidi100',
+      'tencent-meeting', 'wecom-messaging', 'kuaidi100', 'ifind-mcp', 'tencent-weiyun',
     ])
     expect(first.json.endsWith('\n')).toBe(true)
   })
@@ -71,11 +71,11 @@ describe('catalog publishing', () => {
     const published = JSON.parse(await readFile(result.outputPath, 'utf8'))
     expect(validateCatalog(published)).toEqual([])
     expect(result.outputPath).toBe(resolve(site, 'dsh-connector-hub/catalog/v3/index.json'))
-    expect(result.revision).toBe('2026-11-24.1')
+    expect(result.revision).toBe('2026-11-25.1')
     expect(result.ids).toEqual([
       'notion', 'xmind-cn', 'amap', 'baidu-map', 'tencent-docs',
       'qcc', 'github', 'gitee', 'tencent-maps', 'flight-master', 'didi', 'wind-stock', 'variflight',
-      'tencent-meeting', 'wecom-messaging', 'kuaidi100',
+      'tencent-meeting', 'wecom-messaging', 'kuaidi100', 'ifind-mcp', 'tencent-weiyun',
     ])
     expect(await readFile(v1Path, 'utf8')).toBe('existing-v1\n')
     expect(await readFile(v2Path, 'utf8')).toBe('existing-v2\n')
@@ -127,7 +127,7 @@ async function makeFixture() {
   for (const id of [
     'notion', 'xmind-cn', 'amap', 'baidu-map', 'tencent-docs',
     'qcc', 'github', 'gitee', 'tencent-maps', 'flight-master', 'didi', 'wind-stock', 'variflight',
-      'tencent-meeting', 'wecom-messaging', 'kuaidi100',
+      'tencent-meeting', 'wecom-messaging', 'kuaidi100', 'ifind-mcp', 'tencent-weiyun',
   ]) {
     await writeFile(
       resolve(source, `connectors/${id}.yaml`),
