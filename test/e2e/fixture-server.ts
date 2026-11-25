@@ -8,6 +8,7 @@ export const KUAIDI100_CONNECTOR_ID = 'kuaidi100'
 export const CNKI_LAW_CONNECTOR_ID = 'cnki-law'
 export const IFIND_CONNECTOR_ID = 'ifind-mcp'
 export const DNB_CONNECTOR_ID = 'dnb-global-data'
+export const TRIPBIZ_CONNECTOR_ID = 'tripbiz'
 export const TENCENT_MEETING_CONNECTOR_ID = 'tencent-meeting'
 export const WECOM_CONNECTOR_ID = 'wecom-messaging'
 
@@ -40,7 +41,7 @@ export async function startFixtureServer(): Promise<FixtureServer> {
       respondJson(response, 200, currentCatalog)
       return
     }
-    if (!['/mcp', '/v2/mcp', '/bearer/mcp', '/tencent/mcp', '/kuaidi100/mcp', '/cnki/mcp', '/ifind/mcp', '/dnb/mcp', '/meeting/mcp', '/wecom/mcp'].includes(url.pathname)) {
+    if (!['/mcp', '/v2/mcp', '/bearer/mcp', '/tencent/mcp', '/kuaidi100/mcp', '/cnki/mcp', '/ifind/mcp', '/dnb/mcp', '/tripbiz/mcp', '/meeting/mcp', '/wecom/mcp'].includes(url.pathname)) {
       respondJson(response, 404, { error: 'Not found' })
       return
     }
@@ -67,6 +68,8 @@ export async function startFixtureServer(): Promise<FixtureServer> {
     } else if (url.pathname === '/ifind/mcp') {
       authorized = request.headers.authorization === TEST_API_KEY
     } else if (url.pathname === '/dnb/mcp') {
+      authorized = request.headers.authorization === `Bearer ${TEST_API_KEY}`
+    } else if (url.pathname === '/tripbiz/mcp') {
       authorized = request.headers.authorization === `Bearer ${TEST_API_KEY}`
     } else if (url.pathname === '/meeting/mcp') {
       authorized = request.headers['x-tencent-meeting-token'] === TEST_API_KEY
@@ -217,6 +220,20 @@ function catalog(origin: string) {
         type: 'api-key', in: 'header', name: 'Authorization', valueTemplate: 'Bearer ${value}',
         label: { zh: 'Access Token', en: 'Access Token' },
         helpUrl: 'https://docs.dnb.com/partner/en-US/plus/token/1.0/authentication',
+      },
+    }, {
+      id: TRIPBIZ_CONNECTOR_ID,
+      name: { zh: '模拟携程商旅', en: 'Mock TripBiz' },
+      description: { zh: '仅用于自动化测试。', en: 'Used only by automated tests.' },
+      icon: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciLz4=',
+      homepage: 'https://ct.ctrip.com/mcp-gateway/mcp',
+      publisher: 'Connector Hub Tests',
+      official: false,
+      remote: { type: 'streamable-http', url: `${origin}/tripbiz/mcp` },
+      auth: {
+        type: 'api-key', in: 'header', name: 'Authorization', valueTemplate: 'Bearer ${value}',
+        label: { zh: 'Service Token', en: 'Service Token' },
+        helpUrl: 'https://openapi.ctripbiz.com/#/advertise/mcp',
       },
     }, {
       id: TENCENT_MEETING_CONNECTOR_ID,
