@@ -6,6 +6,7 @@ export const BEARER_CONNECTOR_ID = 'mock-bearer'
 export const TENCENT_MAPS_CONNECTOR_ID = 'tencent-maps'
 export const KUAIDI100_CONNECTOR_ID = 'kuaidi100'
 export const CNKI_LAW_CONNECTOR_ID = 'cnki-law'
+export const IFIND_CONNECTOR_ID = 'ifind-mcp'
 export const TENCENT_MEETING_CONNECTOR_ID = 'tencent-meeting'
 export const WECOM_CONNECTOR_ID = 'wecom-messaging'
 
@@ -38,7 +39,7 @@ export async function startFixtureServer(): Promise<FixtureServer> {
       respondJson(response, 200, currentCatalog)
       return
     }
-    if (!['/mcp', '/v2/mcp', '/bearer/mcp', '/tencent/mcp', '/kuaidi100/mcp', '/cnki/mcp', '/meeting/mcp', '/wecom/mcp'].includes(url.pathname)) {
+    if (!['/mcp', '/v2/mcp', '/bearer/mcp', '/tencent/mcp', '/kuaidi100/mcp', '/cnki/mcp', '/ifind/mcp', '/meeting/mcp', '/wecom/mcp'].includes(url.pathname)) {
       respondJson(response, 404, { error: 'Not found' })
       return
     }
@@ -62,6 +63,8 @@ export async function startFixtureServer(): Promise<FixtureServer> {
       authorized = url.searchParams.get('key') === TEST_API_KEY
     } else if (url.pathname === '/cnki/mcp') {
       authorized = request.headers['x-mcp-key'] === TEST_API_KEY && request.headers.authorization === undefined
+    } else if (url.pathname === '/ifind/mcp') {
+      authorized = request.headers.authorization === TEST_API_KEY
     } else if (url.pathname === '/meeting/mcp') {
       authorized = request.headers['x-tencent-meeting-token'] === TEST_API_KEY
         && request.headers['x-skill-version'] === 'v1.1.0'
@@ -183,6 +186,20 @@ function catalog(origin: string) {
         type: 'api-key', in: 'header', name: 'X-MCP-Key',
         label: { zh: 'MCP Key', en: 'MCP Key' },
         helpUrl: 'https://mcp.cnki.net/guide',
+      },
+    }, {
+      id: IFIND_CONNECTOR_ID,
+      name: { zh: '模拟同花顺 iFinD', en: 'Mock iFinD' },
+      description: { zh: '仅用于自动化测试。', en: 'Used only by automated tests.' },
+      icon: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciLz4=',
+      homepage: 'https://mcp.51ifind.com/',
+      publisher: 'Connector Hub Tests',
+      official: false,
+      remote: { type: 'streamable-http', url: `${origin}/ifind/mcp` },
+      auth: {
+        type: 'api-key', in: 'header', name: 'Authorization',
+        label: { zh: 'MCP 密钥', en: 'MCP Key' },
+        helpUrl: 'https://mcp.51ifind.com/#/documents/guide-prepare',
       },
     }, {
       id: TENCENT_MEETING_CONNECTOR_ID,
