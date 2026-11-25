@@ -12,6 +12,7 @@ import {
   KUAIDI100_CONNECTOR_ID,
   CNKI_LAW_CONNECTOR_ID,
   IFIND_CONNECTOR_ID,
+  DNB_CONNECTOR_ID,
   TENCENT_MEETING_CONNECTOR_ID,
   WECOM_CONNECTOR_ID,
   TEST_API_KEY,
@@ -100,7 +101,7 @@ it('runs the API Key lifecycle through real DSH routes and the browser UI', { ti
     const catalog = await request('/api/connector-hub/catalog')
     expect(catalog.status).toBe(200)
     expect(catalog.body).toMatchObject({ source: 'network', stale: false })
-    expect(catalog.body.catalog.connectors).toHaveLength(8)
+    expect(catalog.body.catalog.connectors).toHaveLength(9)
     expect(catalog.body.catalog.connectors[0].id).toBe(CONNECTOR_ID)
 
     const rejected = await request('/api/connector-hub/api-key-connect', 'POST', { id: CONNECTOR_ID, key: 'wrong-key' })
@@ -173,6 +174,7 @@ it('runs the API Key lifecycle through real DSH routes and the browser UI', { ti
       KUAIDI100_CONNECTOR_ID,
       CNKI_LAW_CONNECTOR_ID,
       IFIND_CONNECTOR_ID,
+      DNB_CONNECTOR_ID,
       TENCENT_MEETING_CONNECTOR_ID,
       WECOM_CONNECTOR_ID,
     ]) {
@@ -210,6 +212,8 @@ it('runs the API Key lifecycle through real DSH routes and the browser UI', { ti
         expect(variantRequests.every(item => item.mcpKey === TEST_API_KEY && item.authorization === undefined)).toBe(true)
       } else if (id === IFIND_CONNECTOR_ID) {
         expect(variantRequests.every(item => item.authorization === TEST_API_KEY && item.mcpKey === undefined)).toBe(true)
+      } else if (id === DNB_CONNECTOR_ID) {
+        expect(variantRequests.every(item => item.authorization === `Bearer ${TEST_API_KEY}` && item.mcpKey === undefined)).toBe(true)
       } else if (id === TENCENT_MEETING_CONNECTOR_ID) {
         expect(variantRequests.every(item => item.meetingToken === TEST_API_KEY && item.skillVersion === 'v1.1.0')).toBe(true)
       } else {
@@ -225,6 +229,7 @@ it('runs the API Key lifecycle through real DSH routes and the browser UI', { ti
     expect(web.logs()).not.toContain(`wrong-${KUAIDI100_CONNECTOR_ID}-key`)
     expect(web.logs()).not.toContain(`wrong-${CNKI_LAW_CONNECTOR_ID}-key`)
     expect(web.logs()).not.toContain(`wrong-${IFIND_CONNECTOR_ID}-key`)
+    expect(web.logs()).not.toContain(`wrong-${DNB_CONNECTOR_ID}-key`)
 
     browser = await chromium.launch({
       headless: true,
