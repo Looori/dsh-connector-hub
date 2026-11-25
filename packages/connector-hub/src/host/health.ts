@@ -1,4 +1,5 @@
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
+import type { RemoteConfig } from '../shared/catalog'
 import type { StoredConnector } from '../shared/config'
 import type { ConnectorProbeResult } from '../shared/status'
 import { CredentialGateway } from './gateway'
@@ -15,9 +16,10 @@ export interface ProbeEndpoint {
 export interface ProbeOptions {
   timeoutMs?: number
   now?: () => Date
+  probe?: RemoteConfig['probe']
 }
 
-/** Probe initialize + tools/list through the same credential gateway used by real tool calls. */
+/** Probe initialize + tools/list, plus an optional read-only tool, through the credential gateway. */
 export async function probeConnector(
   id: string,
   endpoint: ProbeEndpoint,
@@ -41,7 +43,16 @@ export async function probeConnector(
     const tools = await Promise.race([
       (async () => {
         await client.connect(transport)
-        return client.listTools()
+        const tools = await client.listTools()
+        if (options.probe) {
+          const result = await client.callTool({
+            name: options.probe.tool,
+            arguments: options.probe.arguments,
+          })
+          const error = probeToolError(result)
+          if (error) throw new Error(`MCP probe tool ${options.probe.tool} failed: ${error}`)
+        }
+        return tools
       })(),
       deadline,
     ])
@@ -101,10 +112,24 @@ async function probeCandidateCredential(
     secrets,
   })
   try {
-    return await probeConnector(id, gateway.endpoint(id), options)
+    return await probeConnector(id, gateway.endpoint(id), { ...options, probe: connector.remote.probe })
   } finally {
     await gateway.close()
   }
+}
+
+function probeToolError(result: unknown): string | null {
+  if (!result || typeof result !== 'object') return null
+  const structured = 'structuredContent' in result && result.structuredContent && typeof result.structuredContent === 'object'
+    ? result.structuredContent as Record<string, unknown>
+    : null
+  const structuredError = structured?.error
+  if (typeof structuredError === 'string' && structuredError) return structuredError
+  if (structuredError !== undefined && structuredError !== null && structuredError !== '' && structuredError !== false) {
+    return JSON.stringify(structuredError) ?? String(structuredError)
+  }
+  if ('isError' in result && result.isError === true) return 'The tool returned isError=true'
+  return null
 }
 
 function elapsedSince(started: number): number {

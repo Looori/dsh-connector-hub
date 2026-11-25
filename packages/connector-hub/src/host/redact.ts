@@ -25,7 +25,9 @@ export function redactSensitiveText(input: string): string {
   return input
     .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, 'Bearer REDACTED')
     .replace(/([?&](?:key|ak|token|access_token|refresh_token|api_key|apikey|secret|client_secret|code)=)[^\s&#]+/gi, '$1REDACTED')
-    .replace(/("(?:access_token|refresh_token|apiKey|api_key|client_secret|password)"\s*:\s*")[^"]*(")/gi, '$1REDACTED$2')
+    .replace(/("(?:access_token|refresh_token|token|apiKey|api_key|client_secret|password)"\s*:\s*")[^"]*(")/gi, '$1REDACTED$2')
+    .replace(/\bmcp_token=[^\s,&;"]+/gi, 'mcp_token=REDACTED')
+    .replace(/(\btoken\s*:\s*)[A-Za-z0-9._~+/=-]+/gi, '$1REDACTED')
 }
 
 export function safeErrorMessage(error: unknown, maxLength = 300): string {

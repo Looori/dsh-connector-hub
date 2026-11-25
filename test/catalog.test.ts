@@ -151,6 +151,20 @@ describe('initial connector catalog', () => {
     }
   })
 
+  it('allows a read-only tool probe and rejects malformed probe configuration', () => {
+    const valid = changedCatalog(value => {
+      value.connectors[4].remote.probe = { tool: 'weiyun.list', arguments: { limit: 1 } }
+    })
+    expect(validateCatalog(valid)).toEqual([])
+
+    for (const probe of [{ tool: '' }, { tool: 'weiyun.list', arguments: [] }]) {
+      const invalid = changedCatalog(value => {
+        value.connectors[4].remote.probe = probe
+      })
+      expect(validateCatalog(invalid).length).toBeGreaterThan(0)
+    }
+  })
+
   it('allows unknown non-sensitive fields for forward compatibility', () => {
     const value = changedCatalog(value => {
       value.connectors[0].futureField = { enabled: true }

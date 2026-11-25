@@ -152,6 +152,16 @@ describe('sensitive data redaction', () => {
     expect(result).not.toContain('json-secret')
   })
 
+  it('redacts custom Token headers and token fields reflected by upstream tools', () => {
+    const result = safeErrorMessage(new Error('GetToken not found, token:reflected-secret; mcp_token=header-secret {"token":"json-secret"}'))
+    expect(result).toContain('token:REDACTED')
+    expect(result).toContain('mcp_token=REDACTED')
+    expect(result).toContain('"token":"REDACTED"')
+    expect(result).not.toContain('reflected-secret')
+    expect(result).not.toContain('header-secret')
+    expect(result).not.toContain('json-secret')
+  })
+
   it('bounds safe error summaries and leaves ordinary errors readable', () => {
     expect(safeErrorMessage(new Error('Connection refused'))).toBe('Connection refused')
     expect(safeErrorMessage('x'.repeat(400), 100)).toHaveLength(101)

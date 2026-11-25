@@ -7,6 +7,10 @@ export interface RemoteConfig {
   type: 'streamable-http'
   url: string
   headers?: Record<string, string>
+  probe?: {
+    tool: string
+    arguments?: Record<string, unknown>
+  }
 }
 
 export interface OAuthAuthBase {

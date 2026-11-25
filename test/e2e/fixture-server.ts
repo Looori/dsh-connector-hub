@@ -9,6 +9,7 @@ export const CNKI_LAW_CONNECTOR_ID = 'cnki-law'
 export const IFIND_CONNECTOR_ID = 'ifind-mcp'
 export const DNB_CONNECTOR_ID = 'dnb-global-data'
 export const TRIPBIZ_CONNECTOR_ID = 'tripbiz'
+export const TENCENT_WEIYUN_CONNECTOR_ID = 'tencent-weiyun'
 export const TENCENT_MEETING_CONNECTOR_ID = 'tencent-meeting'
 export const WECOM_CONNECTOR_ID = 'wecom-messaging'
 
@@ -24,6 +25,7 @@ export interface FixtureServer {
     apikey: string | null
     authorization: string | undefined
     mcpKey: string | undefined
+    wyHeader: string | undefined
     meetingToken: string | undefined
     skillVersion: string | undefined
   }[]
@@ -41,7 +43,7 @@ export async function startFixtureServer(): Promise<FixtureServer> {
       respondJson(response, 200, currentCatalog)
       return
     }
-    if (!['/mcp', '/v2/mcp', '/bearer/mcp', '/tencent/mcp', '/kuaidi100/mcp', '/cnki/mcp', '/ifind/mcp', '/dnb/mcp', '/tripbiz/mcp', '/meeting/mcp', '/wecom/mcp'].includes(url.pathname)) {
+    if (!['/mcp', '/v2/mcp', '/bearer/mcp', '/tencent/mcp', '/kuaidi100/mcp', '/cnki/mcp', '/ifind/mcp', '/dnb/mcp', '/tripbiz/mcp', '/weiyun/mcp', '/meeting/mcp', '/wecom/mcp'].includes(url.pathname)) {
       respondJson(response, 404, { error: 'Not found' })
       return
     }
@@ -53,6 +55,7 @@ export async function startFixtureServer(): Promise<FixtureServer> {
       apikey: url.searchParams.get('apikey'),
       authorization: request.headers.authorization,
       mcpKey: request.headers['x-mcp-key'],
+      wyHeader: request.headers.wyheader,
       meetingToken: request.headers['x-tencent-meeting-token'],
       skillVersion: request.headers['x-skill-version'],
     })
@@ -71,13 +74,15 @@ export async function startFixtureServer(): Promise<FixtureServer> {
       authorized = request.headers.authorization === `Bearer ${TEST_API_KEY}`
     } else if (url.pathname === '/tripbiz/mcp') {
       authorized = request.headers.authorization === `Bearer ${TEST_API_KEY}`
+    } else if (url.pathname === '/weiyun/mcp') {
+      authorized = request.headers.wyheader === `mcp_token=${TEST_API_KEY}` && request.headers.authorization === undefined
     } else if (url.pathname === '/meeting/mcp') {
       authorized = request.headers['x-tencent-meeting-token'] === TEST_API_KEY
         && request.headers['x-skill-version'] === 'v1.1.0'
     } else if (url.pathname === '/wecom/mcp') {
       authorized = url.searchParams.get('apikey') === TEST_API_KEY
     }
-    if (!authorized) {
+    if (!authorized && url.pathname !== '/weiyun/mcp') {
       respondJson(response, 401, { error: 'Invalid API Key' })
       return
     }
@@ -90,6 +95,17 @@ export async function startFixtureServer(): Promise<FixtureServer> {
       const message = await readJson(request)
       if (message.id === undefined) {
         response.writeHead(202).end()
+        return
+      }
+      if (url.pathname === '/weiyun/mcp' && !authorized && message.method === 'tools/call') {
+        const error = `GetToken not found, token:${request.headers.wyheader?.replace(/^mcp_token=/, '') ?? ''}`
+        respondJson(response, 200, {
+          jsonrpc: '2.0', id: message.id,
+          result: {
+            content: [{ type: 'text', text: error }],
+            structuredContent: { error },
+          },
+        })
         return
       }
       respondJson(response, 200, rpcResult(message))
@@ -234,6 +250,23 @@ function catalog(origin: string) {
         type: 'api-key', in: 'header', name: 'Authorization', valueTemplate: 'Bearer ${value}',
         label: { zh: 'Service Token', en: 'Service Token' },
         helpUrl: 'https://openapi.ctripbiz.com/#/advertise/mcp',
+      },
+    }, {
+      id: TENCENT_WEIYUN_CONNECTOR_ID,
+      name: { zh: '模拟腾讯微云', en: 'Mock Tencent Weiyun' },
+      description: { zh: '仅用于自动化测试。', en: 'Used only by automated tests.' },
+      icon: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciLz4=',
+      homepage: 'https://www.weiyun.com/act/openclaw',
+      publisher: 'Connector Hub Tests',
+      official: false,
+      remote: {
+        type: 'streamable-http', url: `${origin}/weiyun/mcp`,
+        probe: { tool: 'weiyun.list', arguments: { limit: 1 } },
+      },
+      auth: {
+        type: 'api-key', in: 'header', name: 'WyHeader', valueTemplate: 'mcp_token=${value}',
+        label: { zh: 'MCP Token', en: 'MCP Token' },
+        helpUrl: 'https://www.weiyun.com/act/openclaw',
       },
     }, {
       id: TENCENT_MEETING_CONNECTOR_ID,

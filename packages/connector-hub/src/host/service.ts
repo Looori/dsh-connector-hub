@@ -48,7 +48,7 @@ export interface ConnectorHubServiceOptions {
   reauthRequired?: Set<string>
   probeCandidate?: (id: string, connector: StoredConnector, key: string) => Promise<ConnectorProbeResult>
   probeOAuthCandidate?: (id: string, connector: StoredConnector, secret: OAuthSecret) => Promise<ConnectorProbeResult>
-  probeMounted?: (id: string) => Promise<ConnectorProbeResult>
+  probeMounted?: (id: string, connector: StoredConnector) => Promise<ConnectorProbeResult>
   now?: () => Date
 }
 
@@ -80,7 +80,10 @@ export class ConnectorHubService {
     this.reauthRequired = options.reauthRequired ?? new Set()
     this.probeCandidate = options.probeCandidate ?? probeApiKeyConnector
     this.probeOAuthCandidate = options.probeOAuthCandidate ?? probeOAuthConnector
-    this.probeMounted = options.probeMounted ?? (id => probeConnector(id, options.gateway.endpoint(id)))
+    this.probeMounted = options.probeMounted ?? (id => {
+      const connector = options.store.snapshot()?.connectors[id]
+      return probeConnector(id, options.gateway.endpoint(id), { probe: connector?.remote.probe })
+    })
     this.now = options.now ?? (() => new Date())
   }
 
@@ -242,7 +245,9 @@ export class ConnectorHubService {
   private async sharedProbe(id: string): Promise<ConnectorProbeResult> {
     const pending = this.pendingProbes.get(id)
     if (pending) return pending
-    const promise = this.probeMounted(id)
+    const connector = this.store.snapshot()?.connectors[id]
+    if (!connector) throw new ConnectorHubError('Connector is not added', 404)
+    const promise = this.probeMounted(id, connector)
     this.pendingProbes.set(id, promise)
     try {
       return await promise

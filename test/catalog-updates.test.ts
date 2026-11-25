@@ -23,10 +23,11 @@ describe('catalogUpdates', () => {
     const config = fixtureConfig()
     const catalog = fixtureCatalog()
     catalog.connectors[0].remote.url = 'https://example.com/v2/mcp'
+    catalog.connectors[0].remote.probe = { tool: 'weiyun.list', arguments: { limit: 1 } }
     if (catalog.connectors[0].auth.type === 'api-key') catalog.connectors[0].auth.name = 'ak'
 
     expect(catalogUpdates(config, catalog)).toEqual([
-      { id: 'amap', kind: 'changed', fields: ['auth.name', 'remote.url'] },
+      { id: 'amap', kind: 'changed', fields: ['auth.name', 'remote.probe', 'remote.url'] },
     ])
   })
 

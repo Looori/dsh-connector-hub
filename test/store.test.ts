@@ -65,6 +65,21 @@ describe('connector config parsing and migration', () => {
     expect(() => parseConnectorConfig(malformed)).toThrow('values must be non-empty strings')
   })
 
+  it('accepts a bounded tool probe and rejects malformed or secret-bearing probe arguments', () => {
+    const valid = configWith('amap')
+    valid.connectors.amap.remote.probe = { tool: 'weiyun.list', arguments: { limit: 1 } }
+    expect(parseConnectorConfig(valid)).toEqual(valid)
+
+    for (const probe of [{ tool: '' }, { tool: 'weiyun.list', arguments: [] }]) {
+      const invalid = configWith('amap')
+      invalid.connectors.amap.remote.probe = probe
+      expect(() => parseConnectorConfig(invalid)).toThrow('remote.probe')
+    }
+    const secret = configWith('amap')
+    secret.connectors.amap.remote.probe = { tool: 'weiyun.list', arguments: { token: 'never-print-this' } }
+    expect(() => parseConnectorConfig(secret)).toThrow('credentials are not allowed')
+  })
+
   it('rejects malformed entries and credentials without echoing secret values', () => {
     const malformed = configWith('notion')
     malformed.connectors.notion.enabled = 'yes'

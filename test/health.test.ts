@@ -50,6 +50,19 @@ describe('probeConnector', () => {
     expect(await fixture.secrets.read('test-map')).toEqual({ v: 1, apiKey: 'api-secret' })
   })
 
+  it('rejects a configured read-only probe error and redacts a reflected Token', async () => {
+    const fixture = await startFixture('header', { toolError: true })
+    const result = await probeConnector('test-map', fixture.gateway.endpoint('test-map'), {
+      probe: { tool: 'weiyun.list', arguments: { limit: 1 } },
+    })
+
+    expect(result.ok).toBe(false)
+    expect(result.error).toContain('MCP probe tool weiyun.list failed')
+    expect(result.error).toContain('token:REDACTED')
+    expect(result.error).not.toContain('api-secret')
+    expect(fixture.methods).toEqual(['initialize', 'tools/list', 'tools/call'])
+  })
+
   it('bounds a stalled probe and returns a safe timeout summary', async () => {
     const fixture = await startFixture('none', { stall: true })
     const result = await probeConnector('test-map', fixture.gateway.endpoint('test-map'), { timeoutMs: 30 })
@@ -103,6 +116,14 @@ async function startFixture(mode, options = {}) {
             { name: 'maps_geo', inputSchema: { type: 'object' } },
             { name: 'echo', inputSchema: { type: 'object' } },
           ] },
+        }))
+      } else if (body.method === 'tools/call' && options.toolError) {
+        response.end(JSON.stringify({
+          jsonrpc: '2.0', id: body.id,
+          result: {
+            content: [{ type: 'text', text: 'GetToken not found, token:api-secret' }],
+            structuredContent: { error: 'GetToken not found, token:api-secret' },
+          },
         }))
       } else {
         response.end(JSON.stringify({ jsonrpc: '2.0', id: body.id, error: { code: -32601, message: 'Unknown method' } }))

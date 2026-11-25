@@ -112,6 +112,16 @@ function validateRemote(remote: unknown, path: string): void {
   }
   const loopbackHttp = url.protocol === 'http:' && ['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname)
   if (url.protocol !== 'https:' && !loopbackHttp) throw invalid(`${path}.remote.url must use HTTPS`)
+  if (remote.probe !== undefined) {
+    if (!isRecord(remote.probe) || typeof remote.probe.tool !== 'string'
+      || remote.probe.tool.length === 0 || remote.probe.tool.length > 128) {
+      throw invalid(`${path}.remote.probe.tool must be a non-empty string of at most 128 characters`)
+    }
+    if (remote.probe.arguments !== undefined && (!isRecord(remote.probe.arguments)
+      || JSON.stringify(remote.probe.arguments).length > 4096)) {
+      throw invalid(`${path}.remote.probe.arguments must be an object of at most 4096 JSON characters`)
+    }
+  }
   if (remote.headers === undefined) return
   if (!isRecord(remote.headers) || Object.keys(remote.headers).length > 16) {
     throw invalid(`${path}.remote.headers must be an object with at most 16 entries`)
