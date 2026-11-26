@@ -10,6 +10,7 @@ export const IFIND_CONNECTOR_ID = 'ifind-mcp'
 export const DNB_CONNECTOR_ID = 'dnb-global-data'
 export const TRIPBIZ_CONNECTOR_ID = 'tripbiz'
 export const TENCENT_WEIYUN_CONNECTOR_ID = 'tencent-weiyun'
+export const YOUZAN_CONNECTOR_ID = 'youzan-workbuddy'
 export const TENCENT_MEETING_CONNECTOR_ID = 'tencent-meeting'
 export const WECOM_CONNECTOR_ID = 'wecom-messaging'
 
@@ -43,7 +44,7 @@ export async function startFixtureServer(): Promise<FixtureServer> {
       respondJson(response, 200, currentCatalog)
       return
     }
-    if (!['/mcp', '/v2/mcp', '/bearer/mcp', '/tencent/mcp', '/kuaidi100/mcp', '/cnki/mcp', '/ifind/mcp', '/dnb/mcp', '/tripbiz/mcp', '/weiyun/mcp', '/meeting/mcp', '/wecom/mcp'].includes(url.pathname)) {
+    if (!['/mcp', '/v2/mcp', '/bearer/mcp', '/tencent/mcp', '/kuaidi100/mcp', '/cnki/mcp', '/ifind/mcp', '/dnb/mcp', '/tripbiz/mcp', '/weiyun/mcp', '/youzan/mcp', '/meeting/mcp', '/wecom/mcp'].includes(url.pathname)) {
       respondJson(response, 404, { error: 'Not found' })
       return
     }
@@ -76,6 +77,8 @@ export async function startFixtureServer(): Promise<FixtureServer> {
       authorized = request.headers.authorization === `Bearer ${TEST_API_KEY}`
     } else if (url.pathname === '/weiyun/mcp') {
       authorized = request.headers.wyheader === `mcp_token=${TEST_API_KEY}` && request.headers.authorization === undefined
+    } else if (url.pathname === '/youzan/mcp') {
+      authorized = request.headers.authorization === `Bearer ${TEST_API_KEY}`
     } else if (url.pathname === '/meeting/mcp') {
       authorized = request.headers['x-tencent-meeting-token'] === TEST_API_KEY
         && request.headers['x-skill-version'] === 'v1.1.0'
@@ -267,6 +270,20 @@ function catalog(origin: string) {
         type: 'api-key', in: 'header', name: 'WyHeader', valueTemplate: 'mcp_token=${value}',
         label: { zh: 'MCP Token', en: 'MCP Token' },
         helpUrl: 'https://www.weiyun.com/act/openclaw',
+      },
+    }, {
+      id: YOUZAN_CONNECTOR_ID,
+      name: { zh: '模拟有赞', en: 'Mock Youzan' },
+      description: { zh: '仅用于自动化测试。', en: 'Used only by automated tests.' },
+      icon: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciLz4=',
+      homepage: 'https://claw.youzan.com/',
+      publisher: 'Connector Hub Tests',
+      official: false,
+      remote: { type: 'streamable-http', url: `${origin}/youzan/mcp` },
+      auth: {
+        type: 'api-key', in: 'header', name: 'Authorization', valueTemplate: 'Bearer ${value}',
+        label: { zh: 'Service Token', en: 'Service Token' },
+        helpUrl: 'https://claw.youzan.com/help/standalone',
       },
     }, {
       id: TENCENT_MEETING_CONNECTOR_ID,
