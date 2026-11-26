@@ -108,6 +108,26 @@ describe('OAuth authorization lifecycle', () => {
     expect(fixture.server.tokenRequests[0].get('client_id')).toBe('shared-public-client')
   })
 
+  it('uses a shared public client with CamScanner scope and general agent header', async () => {
+    const fixture = await startFixture({ fixed: true })
+    const connector = fixture.catalogValue.connectors[0]
+    connector.id = 'camscanner-mcp'
+    connector.auth.scope = 'mcp:tools'
+    connector.auth.callbackPath = '/oauth/callback/camscanner-mcp'
+    connector.remote.headers = { 'X-IS-AGENT': 'general' }
+
+    const started = await fixture.service.startOAuth('camscanner-mcp')
+    const authorization = new URL(started.authorizationUrl)
+    expect(authorization.searchParams.get('client_id')).toBe('shared-public-client')
+    expect(authorization.searchParams.get('scope')).toBe('mcp:tools')
+    expect(authorization.searchParams.get('code_challenge_method')).toBe('S256')
+    expect(new URL(authorization.searchParams.get('redirect_uri')).pathname).toBe('/oauth/callback/camscanner-mcp')
+    await completeAuthorization(fixture, started, authorization)
+    expect(fixture.server.registrationRequests).toBe(0)
+    expect(fixture.server.tokenRequests[0].get('client_id')).toBe('shared-public-client')
+    expect((await fixture.store.read()).connectors['camscanner-mcp'].remote.headers).toEqual({ 'X-IS-AGENT': 'general' })
+  })
+
   it('reports a busy fixed port before returning an authorization URL', async () => {
     const blocker = createServer()
     await new Promise(resolve => blocker.listen(0, '127.0.0.1', resolve))
