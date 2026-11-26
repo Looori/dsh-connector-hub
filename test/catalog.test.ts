@@ -18,14 +18,14 @@ function changedCatalog(change) {
 }
 
 describe('initial connector catalog', () => {
-  it('contains exactly the nineteen configured connectors in display order', () => {
+  it('contains exactly the twenty configured connectors in display order', () => {
     expect(validateCatalog(catalog)).toEqual([])
     expect(catalog.schemaVersion).toBe(1)
-    expect(catalog.revision).toBe('2026-11-26.1')
+    expect(catalog.revision).toBe('2026-11-26.2')
     expect(catalog.connectors.map(connector => connector.id)).toEqual([
       'notion', 'xmind-cn', 'amap', 'baidu-map', 'tencent-docs',
       'qcc', 'github', 'gitee', 'tencent-maps', 'flight-master', 'didi', 'wind-stock', 'variflight',
-      'tencent-meeting', 'wecom-messaging', 'kuaidi100', 'ifind-mcp', 'tencent-weiyun', 'canva',
+      'tencent-meeting', 'wecom-messaging', 'kuaidi100', 'ifind-mcp', 'tencent-weiyun', 'canva', 'camscanner-mcp',
     ])
   })
 
@@ -112,6 +112,22 @@ describe('initial connector catalog', () => {
         type: 'oauth', scope: 'design:meta:read design:content:read folder:read asset:read',
         clientId: 'soJ8cbxQ3-ATU01O', callbackPath: '/oauth/callback/canva',
         portPolicy: 'fixed', fixedPort: 43121,
+      },
+    })
+  })
+
+  it('configures CamScanner with the general agent header and shared public client', () => {
+    const camscanner = catalog.connectors.find(item => item.id === 'camscanner-mcp')
+    expect(camscanner).toMatchObject({
+      official: true,
+      remote: {
+        type: 'streamable-http', url: 'https://ai-tools.camscanner.com/mcp',
+        headers: { 'X-IS-AGENT': 'general' },
+      },
+      auth: {
+        type: 'oauth', scope: 'mcp:tools',
+        clientId: 'dyn_0b8b949acff712f3d632d3591fb441c4',
+        callbackPath: '/oauth/callback/camscanner-mcp', portPolicy: 'fixed', fixedPort: 43122,
       },
     })
   })

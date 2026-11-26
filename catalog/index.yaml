@@ -1,5 +1,5 @@
 schemaVersion: 1
-revision: 2026-11-26.1
+revision: 2026-11-26.2
 connectors:
   - notion
   - xmind-cn
@@ -20,3 +20,4 @@ connectors:
   - ifind-mcp
   - tencent-weiyun
   - canva
+  - camscanner-mcp
