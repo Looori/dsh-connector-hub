@@ -70,6 +70,26 @@ describe('OAuth authorization lifecycle', () => {
     expect(fixture.server.tokenRequests[0].get('client_id')).toBe('shared-public-client')
   })
 
+  it('uses a shared public client with Weibo read-only scope and fixed callback', async () => {
+    const fixture = await startFixture({ fixed: true })
+    const connector = fixture.catalogValue.connectors[0]
+    connector.id = 'weibo-cli'
+    connector.auth.scope = 'mcp read'
+    connector.auth.callbackPath = '/oauth/callback/weibo-cli'
+
+    const started = await fixture.service.startOAuth('weibo-cli')
+    const authorization = new URL(started.authorizationUrl)
+    expect(authorization.searchParams.get('client_id')).toBe('shared-public-client')
+    expect(authorization.searchParams.get('scope')).toBe('mcp read')
+    expect(new URL(authorization.searchParams.get('redirect_uri')).pathname).toBe('/oauth/callback/weibo-cli')
+    await completeAuthorization(fixture, started, authorization)
+    expect(fixture.server.registrationRequests).toBe(0)
+    expect(fixture.server.tokenRequests[0].get('client_id')).toBe('shared-public-client')
+
+    await fixture.service.remove('weibo-cli')
+    expect(await fixture.secrets.read('weibo-cli')).toBeNull()
+  })
+
   it('reports a busy fixed port before returning an authorization URL', async () => {
     const blocker = createServer()
     await new Promise(resolve => blocker.listen(0, '127.0.0.1', resolve))

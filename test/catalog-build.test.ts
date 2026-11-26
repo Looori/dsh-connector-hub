@@ -16,7 +16,7 @@ afterEach(async () => {
 })
 
 describe('catalog build', () => {
-  it('builds a deterministic, valid sixteen-entry package snapshot', async () => {
+  it('builds a deterministic, valid eighteen-entry package snapshot', async () => {
     const first = await buildCatalog()
     const second = await buildCatalog()
     expect(second.json).toBe(first.json)

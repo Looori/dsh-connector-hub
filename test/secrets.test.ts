@@ -162,6 +162,25 @@ describe('sensitive data redaction', () => {
     expect(result).not.toContain('json-secret')
   })
 
+  it('includes nested causes without exposing their credentials', () => {
+    const error = new Error('MCP mount failed', {
+      cause: new Error('upstream rejected Bearer cause-secret', {
+        cause: new Error('{"access_token":"nested-secret"}'),
+      }),
+    })
+    const result = safeErrorMessage(error)
+    expect(result).toContain('MCP mount failed')
+    expect(result).toContain('Bearer REDACTED')
+    expect(result).toContain('"access_token":"REDACTED"')
+    expect(result).not.toContain('cause-secret')
+    expect(result).not.toContain('nested-secret')
+  })
+
+  it('includes structured HTTP status in safe upstream error summaries', () => {
+    const error = Object.assign(new Error('Error POSTing to endpoint: '), { status: 403, statusText: 'Forbidden' })
+    expect(safeErrorMessage(error)).toBe('Error POSTing to endpoint:  (HTTP 403 Forbidden)')
+  })
+
   it('bounds safe error summaries and leaves ordinary errors readable', () => {
     expect(safeErrorMessage(new Error('Connection refused'))).toBe('Connection refused')
     expect(safeErrorMessage('x'.repeat(400), 100)).toHaveLength(101)

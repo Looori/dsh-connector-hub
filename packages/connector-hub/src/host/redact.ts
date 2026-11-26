@@ -31,9 +31,24 @@ export function redactSensitiveText(input: string): string {
 }
 
 export function safeErrorMessage(error: unknown, maxLength = 300): string {
-  const raw = error instanceof Error ? error.message : String(error)
+  const raw = errorWithCause(error)
   const safe = redactSensitiveText(raw) || 'Unknown error'
   return safe.length > maxLength ? `${safe.slice(0, maxLength)}…` : safe
+}
+
+function errorWithCause(error: unknown, depth = 0): string {
+  let message = error instanceof Error ? error.message : String(error)
+  if (error && typeof error === 'object') {
+    const hasStatusText = 'statusText' in error && typeof error.statusText === 'string'
+    const status = hasStatusText && 'status' in error && typeof error.status === 'number' ? error.status : undefined
+    const statusText = hasStatusText ? error.statusText : ''
+    if (status !== undefined && !message.includes(`HTTP ${status}`)) {
+      message = `${message} (HTTP ${status}${statusText ? ` ${statusText}` : ''})`
+    }
+  }
+  if (depth >= 3 || !(error instanceof Error) || error.cause === undefined) return message
+  const cause = errorWithCause(error.cause, depth + 1)
+  return cause && cause !== message ? `${message}: ${cause}` : message
 }
 
 function normalizeKey(key: string): string {
