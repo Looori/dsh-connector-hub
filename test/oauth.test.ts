@@ -90,6 +90,24 @@ describe('OAuth authorization lifecycle', () => {
     expect(await fixture.secrets.read('weibo-cli')).toBeNull()
   })
 
+  it('uses a shared public client with Canva read-only scopes and fixed callback', async () => {
+    const fixture = await startFixture({ fixed: true })
+    const connector = fixture.catalogValue.connectors[0]
+    connector.id = 'canva'
+    connector.auth.scope = 'design:meta:read design:content:read folder:read asset:read'
+    connector.auth.callbackPath = '/oauth/callback/canva'
+
+    const started = await fixture.service.startOAuth('canva')
+    const authorization = new URL(started.authorizationUrl)
+    expect(authorization.searchParams.get('client_id')).toBe('shared-public-client')
+    expect(authorization.searchParams.get('scope')).toBe('design:meta:read design:content:read folder:read asset:read')
+    expect(authorization.searchParams.get('code_challenge_method')).toBe('S256')
+    expect(new URL(authorization.searchParams.get('redirect_uri')).pathname).toBe('/oauth/callback/canva')
+    await completeAuthorization(fixture, started, authorization)
+    expect(fixture.server.registrationRequests).toBe(0)
+    expect(fixture.server.tokenRequests[0].get('client_id')).toBe('shared-public-client')
+  })
+
   it('reports a busy fixed port before returning an authorization URL', async () => {
     const blocker = createServer()
     await new Promise(resolve => blocker.listen(0, '127.0.0.1', resolve))
