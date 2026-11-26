@@ -34,8 +34,8 @@
         "zh": "连接器市场"
       },
       "description": {
-        "en": "Browse 15 curated remote MCP connectors in a Connectors tab, authorize them with OAuth or an API key, and keep credentials in the macOS Keychain.",
-        "zh": "在「连接器」tab 中浏览 15 个精选远程 MCP 连接器，用 OAuth 或 API Key 完成授权，凭据保存在 macOS 钥匙串。"
+        "en": "Browse 20 curated remote MCP connectors in a Connectors tab, authorize them with OAuth or an API key, and keep credentials in the macOS Keychain.",
+        "zh": "在「连接器」tab 中浏览 20 个精选远程 MCP 连接器，用 OAuth 或 API Key 完成授权，凭据保存在 macOS 钥匙串。"
       },
       "icon": "icons/connector-hub.svg",
       "author": "Looori",
@@ -58,6 +58,16 @@
         ]
       },
       "versions": [
+        {
+          "version": "0.3.1",
+          "publishTimestamp": 1795697457,
+          "source": {
+            "type": "npm"
+          },
+          "engines": {
+            "dsh": ">=0.2.1-rc.5 <0.3.0"
+          }
+        },
         {
           "version": "0.3.0",
           "publishTimestamp": 1795409616,

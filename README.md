@@ -6,7 +6,7 @@ DeepSeek Harness（DSH）的社区连接器插件：在 Plugins 页的「连接�
 
 ## 功能
 
-- 内置 16 个连接器：Notion、Xmind（中国版）、高德地图、百度地图、腾讯文档、企查查、GitHub、Gitee、腾讯地图、航班管家、滴滴出行、万得股票数据、飞常准、腾讯会议、企业微信（消息）和快递100。
+- 内置 20 个连接器：Notion、Xmind（中国版）、高德地图、百度地图、腾讯文档、企查查、GitHub、Gitee、腾讯地图、航班管家、滴滴出行、万得股票数据、飞常准、腾讯会议、企业微信（消息）、快递100、同花顺 iFinD、腾讯微云、Canva 可画和扫描全能王。
 - 支持 OAuth 授权码与设备授权、token 自动刷新，以及请求头或查询参数形式的 API Key；需要 Bearer 的服务会自动补前缀。
 - 企查查和 GitHub 使用 OAuth；GitHub 固定为只读，并启用 repos、issues、pull_requests、context、copilot、users 工具集。已有 API Key 连接只有在明确应用目录更新并完成 OAuth 后才会迁移。
 - 连接器挂载在 profile 根目录，添加后可由该 profile 的所有会话使用。

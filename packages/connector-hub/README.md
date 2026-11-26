@@ -39,6 +39,10 @@ The catalog includes:
 | Tencent Meeting | Personal token |
 | WeCom Messaging | API Key |
 | Kuaidi100 | API Key (enterprise authorization key) |
+| iFinD | API Key |
+| Tencent Weiyun | API Key |
+| Canva China | OAuth (authorization code + PKCE) |
+| CamScanner | OAuth (authorization code + PKCE) |
 
 GitHub uses device authorization and shows a one-time code in the authorization dialog. Existing Qichacha and GitHub API Key connections keep working unchanged until you explicitly apply the catalog update and complete OAuth. Cancelling or failing that authorization preserves the previous connection and credential.
 

@@ -1,6 +1,6 @@
 {
   "name": "dsh-connector-hub",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Community connector hub for DeepSeek Harness; not an official DeepSeek product.",
   "license": "MIT",
   "keywords": [
