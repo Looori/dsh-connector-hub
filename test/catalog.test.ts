@@ -18,14 +18,14 @@ function changedCatalog(change) {
 }
 
 describe('initial connector catalog', () => {
-  it('contains exactly the eighteen configured connectors in display order', () => {
+  it('contains exactly the nineteen configured connectors in display order', () => {
     expect(validateCatalog(catalog)).toEqual([])
     expect(catalog.schemaVersion).toBe(1)
-    expect(catalog.revision).toBe('2026-11-25.1')
+    expect(catalog.revision).toBe('2026-11-26.1')
     expect(catalog.connectors.map(connector => connector.id)).toEqual([
       'notion', 'xmind-cn', 'amap', 'baidu-map', 'tencent-docs',
       'qcc', 'github', 'gitee', 'tencent-maps', 'flight-master', 'didi', 'wind-stock', 'variflight',
-      'tencent-meeting', 'wecom-messaging', 'kuaidi100', 'ifind-mcp', 'tencent-weiyun',
+      'tencent-meeting', 'wecom-messaging', 'kuaidi100', 'ifind-mcp', 'tencent-weiyun', 'canva',
     ])
   })
 
@@ -99,6 +99,19 @@ describe('initial connector catalog', () => {
       auth: {
         type: 'oauth', flow: 'device', scope: 'repo read:org read:user offline_access',
         clientId: 'Ov23lie6F9QRY3rJ3wmj',
+      },
+    })
+  })
+
+  it('configures Canva with the shared public client and read-only scopes', () => {
+    const canva = catalog.connectors.find(item => item.id === 'canva')
+    expect(canva).toMatchObject({
+      official: true,
+      remote: { type: 'streamable-http', url: 'https://mcp.canva.cn/mcp' },
+      auth: {
+        type: 'oauth', scope: 'design:meta:read design:content:read folder:read asset:read',
+        clientId: 'soJ8cbxQ3-ATU01O', callbackPath: '/oauth/callback/canva',
+        portPolicy: 'fixed', fixedPort: 43121,
       },
     })
   })
