@@ -68,3 +68,7 @@ Removing a connector deletes its local credential. Where supported, the plugin a
 ## Development
 
 See the [repository README](https://github.com/Looori/dsh-connector-hub#readme) for development commands, tests, and project documentation.
+
+## License
+
+[MIT](LICENSE)

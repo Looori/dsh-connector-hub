@@ -58,3 +58,7 @@ pnpm catalog:build
 ```
 
 自动端到端测试使用临时 `DSH_HOME`、本地模拟服务和进程内伪钥匙串，不访问真实用户配置、真实钥匙串或真实服务商。
+
+## License
+
+[MIT](LICENSE)
